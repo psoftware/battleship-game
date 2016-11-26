@@ -83,7 +83,7 @@ int split_eos(char * mul_str, int length, char ** string_pointers, int max_point
 	return counter;
 }
 
-void pack_eos(char * mul_str, char ** string_pointers, int n_str)
+int pack_eos(char * mul_str, char ** string_pointers, int n_str)
 {
 	int i;
 	int buff_next_index=0;
@@ -92,4 +92,6 @@ void pack_eos(char * mul_str, char ** string_pointers, int n_str)
 		strcpy(&mul_str[buff_next_index], string_pointers[i]);
 		buff_next_index += strlen(string_pointers[i])+1;
 	}
+
+	return buff_next_index;
 }

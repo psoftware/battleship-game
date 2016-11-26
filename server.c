@@ -141,22 +141,21 @@ int cmd_user(int cl_sock, char * buff, int buff_len)
 {
 	print_str_eos(buff, buff_len);
 
+	//individuo il cl_des del socket che ha mandato la richiesta user
 	des_client * cl_des = des_client_find(client_list, cl_sock);
 	if(!cl_des)
 		return -1;
 
+	//splitto il pacchetto che mi è arrivato
 	char * strs[3];
 	if(split_eos(buff, buff_len, strs, 5)!=3)
 		return -1; //condizione da gestire!!!
-
-	/*printf("%s\n", strs[0]);
-	printf("%s\n", strs[1]);
-	printf("%s\n", strs[2]);*/
 
 	//controllo che l'username non esista già
 	if(des_client_check_duplicate(client_list, cl_sock, strs[1]) == -1)
 		return -2;
 
+	//aggiorno i dati del cl_des
 	strcpy(cl_des->username, strs[1]);
 	cl_des->port =atoi(strs[2]);
 	cl_des->status = READY;

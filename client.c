@@ -59,24 +59,22 @@ int main(int argc, char * argv[])
 	// ------ prima fase: richiesta di inserimento username e porta d'ascolto
 	while(1)
 	{
-		int buff_next_index=0;
-		strcpy(buffer, "user");
-		buff_next_index += strlen(buffer)+1;
+		//richiedo username e porta
+		char prefix_str[]="user";
+		char user_str[20];
+		char port_str[20];
 
-		char temp_scanf[20];
-
+		strcpy(prefix_str, "user");
 		printf("\nInserisci il tuo nome: ");
-		scanf("%s", temp_scanf);
-		strcpy(&buffer[buff_next_index], temp_scanf);
-		buff_next_index += strlen(temp_scanf)+1;
-
+		scanf("%s", user_str);
 		printf("Inserisci la porta UDP di ascolto: ");
-		scanf("%s", temp_scanf);
-		strcpy(&buffer[buff_next_index], temp_scanf);
-		buff_next_index += strlen(temp_scanf)+1;
+		scanf("%s", port_str);
 
-		// invio username e porta
-		ret = send_variable_string(sock_client, buffer, buff_next_index-1);
+		//pacco i dati inseriti e li invio
+		char * params[3]; params[0]=prefix_str; params[1]=user_str; params[2]=port_str;
+		int size = pack_eos(buffer, params, 3);
+		ret = send_variable_string(sock_client, buffer, size);
+
 		if(ret == 0 || ret == -1)
 		{
 			close(sock_client);
