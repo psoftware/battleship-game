@@ -1,20 +1,21 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#include<sys/time.h>
-#include<sys/types.h>
-#include<sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
-#include<arpa/inet.h>
-#include<netinet/in.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
 
-#include<unistd.h>
+#include <unistd.h>
 
-#include<errno.h>
+#include <errno.h>
 
-const int BYTE_LENGTH_COUNT=sizeof(unsigned int);
-const int BYTE_RECEIVE_COUNT=20;
+//libreria per il pack dei dati
+#include "lib/commlib.h"
+
 
 /*** STRUTTURE DATI ***/
 
@@ -23,6 +24,7 @@ enum cl_status {WAIT_INIT, READY, INGAME};
 typedef struct des_clients
 {
 	int sock;
+	char username[30];
 	char * address[15];
 	short int port;
 	enum cl_status status;
@@ -36,14 +38,8 @@ des_client *client_list=NULL;
 
 void des_client_add(des_client **head, des_client *elem)
 {
-	des_client *q, *p=*head;
-	for(q=*head; q!=NULL; q=q->next)
-		p=q;
-
-	if(p==*head)
-		*head=elem;
-	else
-		p=elem;
+	elem->next = *head;
+	*head=elem;
 }
 
 void des_client_remove(des_client **head, int cl_sock)
@@ -65,6 +61,27 @@ void des_client_remove(des_client **head, int cl_sock)
 		p->next=q->next;
 
 	//DEALLOCARE q!!
+}
+
+des_client * des_client_find(des_client *head, int cl_sock)
+{
+	des_client *q;
+	for(q=head; q!=NULL && cl_sock!=q->sock; q=q->next);
+
+	if(q==NULL)
+		return NULL;
+
+	return q;
+}
+
+int des_client_check_duplicate(des_client *head, int cl_sock, char * username)
+{
+	des_client *q;
+	for(q=head; q!=NULL && (strcmp(q->username, username)!=0 || cl_sock==q->sock); q=q->next);
+
+	if(q==NULL)
+		return 0;
+	return -1;
 }
 
 void remove_client(int cl_sock, fd_set *master)
@@ -101,55 +118,50 @@ int initialize_server_socket(const char * bind_addr, int port)
 	return ret_sock;
 }
 
-/**** METODI PER LA INVIO RICEZIONE DEI DATI ****/
-
-int recv_variable_string(int cl_sock, char * buff)
-{
-	//faccio una recv di un byte
-	unsigned int bytes_count;
-	int ret = recv(cl_sock, (void*)&bytes_count, BYTE_LENGTH_COUNT, MSG_WAITALL);
-	if(ret == 0 || ret == -1)
-		return ret;
-
-	//faccio una recv di nbyte ricevuti dalla recv precedente
-	ret = recv(cl_sock, (void*)buff, bytes_count, MSG_WAITALL);
-	if(ret == 0 || ret == -1)
-		return ret;
-	if(ret < bytes_count)
-	{
-		printf("recv_variable_string: Byte ricevuti (%d) minori di quelli previsti!\n", ret);
-		return -1;
-	}
-
-	return bytes_count;
-}
-
-int send_variable_string(int cl_sock, char * buff, int bytes_count)
-{
-	//faccio una send del numero di byte che devo spedire
-	int ret = send(cl_sock, (unsigned int*)&bytes_count, BYTE_LENGTH_COUNT, 0);
-	if(ret == 0 || ret == -1)
-		return ret;
-
-	//faccio una send per i bytes_count bytes da inviare
-	ret = send(cl_sock, (void*)buff, bytes_count, 0);
-	if(ret == 0 || ret == -1)
-		return ret;
-	if(ret < bytes_count)
-	{
-		printf("send_variable_string: Byte ricevuti (%d) minori di quelli previsti!\n", ret);
-		return -1;
-	}
-	return ret;
-}
-
 /**** METODI PER COMANDI RICEVUTI ****/
-void who(char * str)
+void cmd_who(char * str)
 {
 	str[0]='\0';
-	strcat(str, "Lista\n");
-	strcat(str, "HI\n");
-	strcat(str, "HI\n");
+	strcat(str, "Client connessi al server:\n");
+
+	des_client *q;
+	for(q=client_list; q!=NULL; q=q->next)
+		if(q->status==INGAME || q->status==READY)
+		{
+			printf("%s(%s)\n", q->username, (q->status==INGAME)?"occupato":"libero");
+			strcat(str, "\t");
+			strcat(str, q->username);
+			strcat(str, "(");
+			strcat(str, (q->status==INGAME)?"occupato":"libero");
+			strcat(str, ")\n");
+		}
+}
+
+int cmd_user(int cl_sock, char * buff, int buff_len)
+{
+	print_str_eos(buff, buff_len);
+
+	des_client * cl_des = des_client_find(client_list, cl_sock);
+	if(!cl_des)
+		return -1;
+
+	char * strs[3];
+	if(split_eos(buff, buff_len, strs, 5)!=3)
+		return -1; //condizione da gestire!!!
+
+	/*printf("%s\n", strs[0]);
+	printf("%s\n", strs[1]);
+	printf("%s\n", strs[2]);*/
+
+	//controllo che l'username non esista già
+	if(des_client_check_duplicate(client_list, cl_sock, strs[1]) == -1)
+		return -2;
+
+	strcpy(cl_des->username, strs[1]);
+	cl_des->port =atoi(strs[2]);
+	cl_des->status = READY;
+
+	return 1;
 }
 
 /**** MAIN ****/
@@ -180,7 +192,6 @@ int main(int argc, char * argv[])
 	
 	char rec_buffer[1024];
 	char send_buffer[1024];
-	//int len = sizeof(my_addr);
 
 	while(1)
 	{
@@ -203,6 +214,7 @@ int main(int argc, char * argv[])
 					new_cl->sock=new_sd;
 					new_cl->status=WAIT_INIT;
 					new_cl->next=NULL;
+					strcpy(new_cl->username, "");
 					des_client_add(&client_list, new_cl);
 					printf("Client connesso (socket %d). In attesa di dati!\n", new_sd);
 				}
@@ -214,41 +226,36 @@ int main(int argc, char * argv[])
 						remove_client(i, &master);
 						continue;
 					}
-					rec_buffer[ret]='\0';
 
 					if(!strcmp(rec_buffer, "user")) {
 						printf("Il client ha inviato username e porta!\n");
-						strcpy(send_buffer, "Connesso con successo!");
+						switch(cmd_user(i, rec_buffer, ret))
+						{
+							case -1:	//errore non recuperabile
+								printf("Errore non recuperabile\n");
+								strcpy(send_buffer, "GENERICERROR");
+								break;
+							case -2:	//username duplicato
+								printf("Username già esistente\n");
+								strcpy(send_buffer, "USEREXISTS");
+								break;
+							case 1:		//tutto ok!
+								printf("Dati corretti, il client ora è pronto\n");
+								strcpy(send_buffer, "OK");
+								break;
+						}
 					}
-					else if(!strcmp(rec_buffer, "who")) {
+					else if(!strcmp(rec_buffer, "!who")) {
 						printf("Ricevuto who!\n");
-						who(send_buffer);
+						cmd_who(send_buffer);
 					}
 					
-
-					ret = send_variable_string(i, send_buffer, strlen(send_buffer));
+					//printf("Sto inviando %s\n", send_buffer);
+					ret = send_variable_string(i, send_buffer, strlen(send_buffer)+1);
 					if(ret == 0 || ret == -1) {
 						remove_client(i, &master);
 						continue;
 					}
-					/*
-					int ret = recv(i, (void*)buffer, BYTE_RECEIVE_COUNT, MSG_WAITALL);
-					if(ret == 0 || ret == -1)
-						remove_client(i, &master);
-					else
-					{
-						if(ret < BYTE_RECEIVE_COUNT)
-							printf("Byte ricevuti (%d) minori di quelli previsti!\n", ret);
-
-						ret = send(i, (void*)buffer, BYTE_RECEIVE_COUNT, 0);
-						if(ret == 0 || ret == -1)
-							remove_client(i, &master);
-						if(ret < BYTE_RECEIVE_COUNT)
-							printf("Byte inviati (%d) minori di quelli previsti!\n", ret);
-
-						printf("Dati inviati correttamente!\n");
-					}
-					*/
 				}
 			}
 	}
