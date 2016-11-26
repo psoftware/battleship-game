@@ -101,48 +101,67 @@ int main(int argc, char * argv[])
 		}
 		else
 		{
-			printf("\nRisposta non riconosciuta, termino.");
+			printf("\nRisposta non prevista, termino.");
 			printf("\n");
 			exit(1);
 		}
 	}
 
-	// ------ seconda fase: invio comandi a server tcp
+	// ------ seconda fase: invio comandi a server tcp e ricezione di richieste di gioco
+	fd_set master, read_fd;
+	FD_ZERO(&master);
+	FD_ZERO(&read_fd);
+	FD_SET(0, &master);
+	FD_SET(sock_client, &master);
+
 	while(1)
 	{
 		// prompt console per comando
 		printf("> ");
-		scanf("%s", buffer);
+		fflush(stdout);
 
-		// parso il comando
-		if(!strcmp(buffer, "!quit"))
-			break;
-		if(!strcmp(buffer, "!help"))
+		read_fd = master;
+		select(sock_client+1, &read_fd, NULL, NULL, NULL);
+		if(FD_ISSET(0, &read_fd))
 		{
-			print_help();
-			continue;
-		}
-		if(!strcmp(buffer, "!connect"))
-		{
-			char username[20];
-			scanf("%s", username);
-		}
-		if(!strcmp(buffer, "!who"))
-		{
-			ret = send_variable_string(sock_client, buffer, strlen(buffer)+1);
+			scanf("%s", buffer);
+
+			// parso il comando
+			if(!strcmp(buffer, "!quit"))
+				break;
+			if(!strcmp(buffer, "!help"))
+			{
+				print_help();
+				continue;
+			}
+			if(!strcmp(buffer, "!connect"))
+			{
+				char username[20];
+				scanf("%s", username);
+			}
+			if(!strcmp(buffer, "!who"))
+			{
+				ret = send_variable_string(sock_client, buffer, strlen(buffer)+1);
+				if(ret == 0 || ret == -1)
+					break;
+			}
+			else
+				continue;
+
+			// ricevo la risposta dal server
+			ret = recv_variable_string(sock_client, buffer);
 			if(ret == 0 || ret == -1)
 				break;
+			buffer[ret]='\0';
+			printf("%s", buffer);
+			printf("\n");
 		}
-		else
-			continue;
-
-		// ricevo la risposta dal server
-		ret = recv_variable_string(sock_client, buffer);
-		if(ret == 0 || ret == -1)
-			break;
-		buffer[ret]='\0';
-		printf("%s", buffer);
-		printf("\n");
+		else if(FD_ISSET(sock_client, &read_fd))
+		{
+			ret = recv_variable_string(sock_client, buffer);
+			printf("Il server ha mandato dati sul socket tcp senza che glieli abbia chiesti!\n");
+			printf("Ha mandato: %s", buffer);
+		}
 	}
 
 	close(sock_client);
