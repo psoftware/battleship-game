@@ -10,10 +10,52 @@
 
 #include<unistd.h>
 
+const int BYTE_LENGTH_COUNT=sizeof(unsigned int);
+
+/**** METODI PER LA INVIO RICEZIONE DEI DATI ****/
+
+int recv_variable_string(int cl_sock, char * buff)
+{
+	//faccio una recv di un byte
+	unsigned int bytes_count;
+	int ret = recv(cl_sock, (void*)&bytes_count, BYTE_LENGTH_COUNT, MSG_WAITALL);
+	if(ret == 0 || ret == -1)
+		return ret;
+
+	//faccio una recv di nbyte ricevuti dalla recv precedente
+	ret = recv(cl_sock, (void*)buff, bytes_count, MSG_WAITALL);
+	if(ret == 0 || ret == -1)
+		return ret;
+	if(ret < bytes_count)
+	{
+		printf("recv_variable_string: Byte ricevuti (%d) minori di quelli previsti!\n", ret);
+		return -1;
+	}
+
+	return bytes_count;
+}
+
+int send_variable_string(int cl_sock, char * buff, int bytes_count)
+{
+	//faccio una send del numero di byte che devo spedire
+	int ret = send(cl_sock, (unsigned int*)&bytes_count, BYTE_LENGTH_COUNT, 0);
+	if(ret == 0 || ret == -1)
+		return ret;
+
+	//faccio una send per i bytes_count bytes da inviare
+	ret = send(cl_sock, (void*)buff, bytes_count, 0);
+	if(ret == 0 || ret == -1)
+		return ret;
+	if(ret < bytes_count)
+	{
+		printf("send_variable_string: Byte ricevuti (%d) minori di quelli previsti!\n", ret);
+		return -1;
+	}
+	return ret;
+}
+
 int main(int argc, char * argv[])
 {
-	const int BYTE_RECEIVE_COUNT=20;
-
 	int porta;
 	if(argc == 1)
 	{
@@ -40,27 +82,40 @@ int main(int argc, char * argv[])
 		exit(1);
 	}
 
-	char buffer[BYTE_RECEIVE_COUNT];
+	char buffer[1024];
 	
 	while(1)
 	{
-		printf("> ");
+		// prompt console per comando
+		printf("!");
 		scanf("%s", buffer);
-		if(strcmp(buffer, "bye")==0)
+
+		// parso il comando
+		if(strcmp(buffer, "help")==0)
 		{
-			close(sock_client);
-			break;
+			printf("Stampo help...\n");
+			continue;
 		}
-		int ret = send(sock_client, (void*)buffer, BYTE_RECEIVE_COUNT, 0);
-		if(ret < strlen(buffer))
-			printf("Byte inviati minori di quelli previsti!\n");
+		if(strcmp(buffer, "bye")==0)
+			break;
+		if(!strcmp(buffer, "who") || !strcmp(buffer, "connect"))
+		{
+			int ret = send_variable_string(sock_client, buffer, strlen(buffer));
+			if(ret == 0 || ret == -1)
+				break;
+		}
+		else
+			continue;
 
-		ret = recv(sock_client, (void*)buffer, BYTE_RECEIVE_COUNT, MSG_WAITALL);
-		if(ret < BYTE_RECEIVE_COUNT)
-			printf("Byte ricevuti (%d) minori di quelli previsti!\n", ret);
-
+		// ricevo la risposta dal server
+		int ret = recv_variable_string(sock_client, buffer);
+		if(ret == 0 || ret == -1)
+			break;
+		buffer[ret]='\0';
 		printf("Ricevuto: %s\n", buffer);
 	}
+
+	close(sock_client);
 	return 0;
 }
 
