@@ -216,13 +216,15 @@ int main(int argc, char * argv[])
 					}
 					rec_buffer[ret]='\0';
 
-					if(!strcmp(rec_buffer, "who")) {
+					if(!strcmp(rec_buffer, "user")) {
+						printf("Il client ha inviato username e porta!\n");
+						strcpy(send_buffer, "Connesso con successo!");
+					}
+					else if(!strcmp(rec_buffer, "who")) {
 						printf("Ricevuto who!\n");
 						who(send_buffer);
 					}
-					else if(!strcmp(rec_buffer, "who")) {
-
-					}
+					
 
 					ret = send_variable_string(i, send_buffer, strlen(send_buffer));
 					if(ret == 0 || ret == -1) {

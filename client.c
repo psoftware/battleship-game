@@ -54,6 +54,14 @@ int send_variable_string(int cl_sock, char * buff, int bytes_count)
 	return ret;
 }
 
+void print_help()
+{
+	printf("!help --> mostra l'elenco dei comandi disponibili\n");
+	printf("!who --> mostra l'elenco dei client connessi al server\n");
+	printf("!connect username --> avvia una partita con l\'utente username\n");
+	printf("!quit --> disconnette il client dal server\n");
+}
+
 int main(int argc, char * argv[])
 {
 	int porta;
@@ -82,8 +90,31 @@ int main(int argc, char * argv[])
 		exit(1);
 	}
 
-	char buffer[1024];
+	printf("\nConnessione al server BOH (porta %d) effettuata con successo", porta);
+	printf("\nSono disponibili i seguenti comandi:\n");
+	print_help();
 	
+	char buffer[1024];
+	int buff_next_index=0;
+
+	// prima fase: richiesta di inserimento username e porta d'ascolto
+	strcpy(buffer, "user");
+	buff_next_index += strlen(buffer)+1;
+
+	printf("Inserisci username: ");
+	buff_next_index += scanf("%s", &buffer[buff_next_index])+1;
+
+	printf("Porta: ");
+	buff_next_index += scanf("%s", &buffer[buff_next_index])+1;
+
+	// invio username e porta
+	int ret = send_variable_string(sock_client, buffer, buff_next_index-1);
+	if(ret == 0 || ret == -1)
+	{
+		close(sock_client);
+		return 0;
+	}
+
 	while(1)
 	{
 		// prompt console per comando
