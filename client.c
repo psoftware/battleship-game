@@ -15,6 +15,8 @@
 //libreria per il pack dei dati
 #include "lib/commlib.h"
 
+char buffer[1024];
+
 void print_help()
 {
 	printf("Sono disponibili i seguenti comandi:\n");
@@ -22,6 +24,58 @@ void print_help()
 	printf("!who --> mostra l'elenco dei client connessi al server\n");
 	printf("!connect username --> avvia una partita con l\'utente username\n");
 	printf("!quit --> disconnette il client dal server\n");
+}
+
+int cmd_connect(int sock_client, char * username)
+{
+	char prefix_str[]="!connect";
+
+	//pacco i dati inseriti e li invio
+	char * params[2]; params[0]=prefix_str; params[1]=username;
+	int size = pack_eos(buffer, params, 2);
+	int ret = send_variable_string(sock_client, buffer, size);
+	if(ret == 0 || ret == -1)
+	{
+		close(sock_client);
+		return 0;
+	}
+
+	//attendo la risposta del server
+	size = recv_variable_string(sock_client, buffer);
+	if(ret == 0 || ret == -1)
+	{
+		close(sock_client);
+		return 0;
+	}
+
+	printf("Connect Ricevuto: ");
+	print_str_eos(buffer, size);
+
+	if(!strcmp(buffer, "GENERICERROR"))
+		return -1;
+	else if(!strcmp(buffer, "USERSELF"))
+		return -2;
+	else if(!strcmp(buffer, "USERNOTFOUND"))
+		return -3;
+	else if(!strcmp(buffer, "USERNOTREADY"))
+		return -4;
+	else if(!strcmp(buffer, "USERNOTACCEPTED"))
+		return -5;
+	else if(!strcmp(buffer, "CONNECTOK")) {
+		//splitto il pacchetto che mi è arrivato
+		char * strs[3];
+		int strs_num = split_eos(buffer, size, strs, 3);
+		if(strs_num!=3)
+		{
+			printf("Ho ricevuto meno stringhe: %d\n", strs_num);
+			return -1; //messaggio mal formato
+		}
+		
+		//FARE COSE UDP
+		return 1;
+	}
+
+	return -1; //in teoria non ci si dovrebbe arrivare qui, quindi nel caso segnalo errore generico
 }
 
 int main(int argc, char * argv[])
@@ -54,8 +108,6 @@ int main(int argc, char * argv[])
 	printf("\nConnessione al server %s (porta %d) effettuata con successo\n\n", argv[1], porta);
 	print_help();
 	
-	char buffer[1024];
-	
 	// ------ prima fase: richiesta di inserimento username e porta d'ascolto
 	while(1)
 	{
@@ -74,7 +126,6 @@ int main(int argc, char * argv[])
 		char * params[3]; params[0]=prefix_str; params[1]=user_str; params[2]=port_str;
 		int size = pack_eos(buffer, params, 3);
 		ret = send_variable_string(sock_client, buffer, size);
-
 		if(ret == 0 || ret == -1)
 		{
 			close(sock_client);
@@ -138,10 +189,31 @@ int main(int argc, char * argv[])
 			{
 				char username[20];
 				scanf("%s", username);
+				switch(cmd_connect(sock_client, username))
+				{
+					case -1:
+						printf("Errore generico!\n");
+						break;
+					case -2:
+						printf("Non puoi giocare con te stesso!\n");
+						break;
+					case -3:
+						printf("L'utente inserito non esiste!\n");
+						break;
+					case -4:
+						printf("L'utente inserito già sta giocando!\n");
+						break;
+					case -5:
+						printf("L'utente inserito ha rifiutato la tua richiesta!\n");
+						break;
+					case 1:
+						printf("Connessione riuscita!\n");
+						break;
+				}
 			}
 			if(!strcmp(buffer, "!who"))
 			{
-				ret = send_variable_string(sock_client, buffer, strlen(buffer)+1);
+				ret = send_variable_string(sock_client, "!who", 5);
 				if(ret == 0 || ret == -1)
 					break;
 			}
@@ -159,8 +231,46 @@ int main(int argc, char * argv[])
 		else if(FD_ISSET(sock_client, &read_fd))
 		{
 			ret = recv_variable_string(sock_client, buffer);
+			if(ret == 0 || ret == -1)
+					break;
+
 			printf("Il server ha mandato dati sul socket tcp senza che glieli abbia chiesti!\n");
-			printf("Ha mandato: %s", buffer);
+			printf("Ha mandato: ");
+			print_str_eos(buffer,ret);
+
+			//splitto il pacchetto che mi è arrivato
+			char * strs[4];
+			int strs_count = split_eos(buffer, ret, strs, 4);
+
+			if(!strcmp(strs[0], "CONNECTREQ")) {
+				if(strs_count!=4)	//controllo che mi siano state mandate almeno 5 stringhe
+					printf("Formato risposta invalido (Errore generico)\n");
+
+				//chiedo se l'utente vuole giocare
+				char resp;
+				printf("%s vuole giocare con te, vuoi accettare? (y/n): ", strs[1]);
+				while(1)
+				{
+					scanf(" %c", &resp);
+					if(resp=='y' || resp=='n')
+						break;
+					else
+						printf("\nDevi rispondere y oppure n: ");
+				}
+
+				//comunico la mia risposta al server (che la reindirizzerà al client)
+				if(resp=='y')
+					ret = send_variable_string(sock_client, "CONNECTACCEPT", 14);
+				else
+					ret = send_variable_string(sock_client, "CONNECTDECLINE", 15);
+
+				//mi metto, eventualmente, in modalità gioco (UDP)
+				//MANCA
+			}
+			else
+			{
+				printf("Comando non riconosciuto: %s", strs[0]);
+			}
 		}
 	}
 

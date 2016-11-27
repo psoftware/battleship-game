@@ -25,8 +25,8 @@ typedef struct des_clients
 {
 	int sock;
 	char username[30];
-	char * address[15];
-	short int port;
+	char address[15];
+	char port[5];
 	enum cl_status status;
 
 	struct des_clients * next;
@@ -67,6 +67,17 @@ des_client * des_client_find(des_client *head, int cl_sock)
 {
 	des_client *q;
 	for(q=head; q!=NULL && cl_sock!=q->sock; q=q->next);
+
+	if(q==NULL)
+		return NULL;
+
+	return q;
+}
+
+des_client * des_client_find_user(des_client *head, char * username)
+{
+	des_client *q;
+	for(q=head; q!=NULL && strcmp(username, q->username)!=0; q=q->next);
 
 	if(q==NULL)
 		return NULL;
@@ -148,7 +159,7 @@ int cmd_user(int cl_sock, char * buff, int buff_len)
 
 	//splitto il pacchetto che mi è arrivato
 	char * strs[3];
-	if(split_eos(buff, buff_len, strs, 5)!=3)
+	if(split_eos(buff, buff_len, strs, 3)!=3)
 		return -1; //condizione da gestire!!!
 
 	//controllo che l'username non esista già
@@ -157,10 +168,63 @@ int cmd_user(int cl_sock, char * buff, int buff_len)
 
 	//aggiorno i dati del cl_des
 	strcpy(cl_des->username, strs[1]);
-	cl_des->port =atoi(strs[2]);
+	strcpy(cl_des->port, strs[2]);
 	cl_des->status = READY;
 
 	return 1;
+}
+
+int cmd_connect(int cl_sock, char * buff, int buff_len, char * res_address, char * res_port)
+{
+	print_str_eos(buff, buff_len);
+
+	//individuo il cl_des del socket che ha mandato la richiesta
+	des_client * cl_des = des_client_find(client_list, cl_sock);
+	if(!cl_des)
+		return -1; //descrittore non trovato
+
+	//splitto il pacchetto che mi è arrivato
+	char * strs[2];
+	if(split_eos(buff, buff_len, strs, 2)!=2)
+		return -1; //messaggio mal formato
+
+	//se il client vuole connettersi a se stesso
+	if(!strcmp(cl_des->username, strs[1]))
+		return -2; //l'utente vuole connettersi a se stesso
+
+	//prendo il descrittore del client a cui l'altro client vuole connettersi
+	des_client * dest_des = des_client_find_user(client_list, strs[1]);
+	if(!dest_des || dest_des->status==WAIT_INIT)
+		return -3; //username non trovato
+	if(dest_des->status==INGAME)
+		return -4; //giocatore occupato
+
+	//invio comando al client con cui il client vuole giocare
+	char temp_buffer[50];
+	char prefix[]="CONNECTREQ";
+	char * params[4];
+	params[0]=prefix; params[1]=cl_des->username; params[2]=cl_des->address; params[3]=cl_des->port;
+	int size = pack_eos(temp_buffer, params, 4);
+	int ret = send_variable_string(dest_des->sock, temp_buffer, size);
+
+	//ricevo la risposta dal client
+	ret = recv_variable_string(dest_des->sock, temp_buffer);
+	if(ret == 0 || ret == -1)
+		return -1;
+
+	printf("Il client destinatario ha risposto %s\n", temp_buffer);
+	if(!strcmp(temp_buffer, "CONNECTACCEPT"))
+	{
+		strcpy(res_address, dest_des->address);
+		strcpy(res_port, dest_des->port);
+		cl_des->status=INGAME;
+		dest_des->status=INGAME;
+		return 1;
+	}
+	else if(!strcmp(temp_buffer, "CONNECTDECLINE"))
+		return -5;
+
+	return -1;
 }
 
 /**** MAIN ****/
@@ -194,8 +258,13 @@ int main(int argc, char * argv[])
 
 	while(1)
 	{
+		printf("\n");
+
 		read_fd = master;
 		select(max_sock_num+1, &read_fd, NULL, NULL, NULL);
+
+		int message_lenght=0;
+
 		for(i=0; i<=max_sock_num; i++)
 			if(FD_ISSET(i, &read_fd))
 			{
@@ -211,11 +280,14 @@ int main(int argc, char * argv[])
 					//creo nuovo client, ne inizializzo stato e socket e lo aggiungo alla lista globale
 					des_client * new_cl = (des_client*)malloc(sizeof(des_client));
 					new_cl->sock=new_sd;
+					if(!inet_ntop(AF_INET, (struct sockaddr*)&cl_addr.sin_addr, new_cl->address, 15))
+						perror("Errore conversione indirizzo client:");
 					new_cl->status=WAIT_INIT;
 					new_cl->next=NULL;
 					strcpy(new_cl->username, "");
 					des_client_add(&client_list, new_cl);
-					printf("Client connesso (socket %d). In attesa di dati!\n", new_sd);
+
+					printf("Client con ip %s connesso (socket %d). In attesa di dati!\n", new_cl->address, new_sd);
 				}
 				else //altrimenti qualche client vuole mandarmi dati
 				{
@@ -248,9 +320,44 @@ int main(int argc, char * argv[])
 						printf("Ricevuto who!\n");
 						cmd_who(send_buffer);
 					}
+					else if(!strcmp(rec_buffer, "!connect")) {
+						printf("Ricevuto connect!\n");
+						char res_address[30];
+						char res_port[5];
+						switch(cmd_connect(i, rec_buffer, ret, res_address, res_port))
+						{
+							case -1:	//errore non recuperabile
+								printf("Errore non recuperabile\n");
+								strcpy(send_buffer, "GENERICERROR");
+								break;
+							case -2:
+								printf("L'utente vuole connettersi a se stesso (wtf?)\n");
+								strcpy(send_buffer, "USERSELF");
+								break;
+							case -3:	//username duplicato
+								printf("Username non esistente\n");
+								strcpy(send_buffer, "USERNOTFOUND");
+								break;
+							case -4:
+								printf("Il client sta già giocando\n");
+								strcpy(send_buffer, "USERNOTREADY");
+								break;
+							case -5:
+								printf("Il client non vuole giocare\n");
+								strcpy(send_buffer, "USERNOTACCEPTED");
+								break;
+							case 1:		//tutto ok, mando le informazioni necessarie al client!
+								printf("Dati corretti, il client ora è pronto\n");
+								char prefix[]="CONNECTOK";
+								char * params[3];
+								params[0]=prefix; params[1]=res_address; params[2]=res_port;
+								message_lenght = pack_eos(send_buffer, params, 3);
+								break;
+						}
+					}
 					
 					//printf("Sto inviando %s\n", send_buffer);
-					ret = send_variable_string(i, send_buffer, strlen(send_buffer)+1);
+					ret = send_variable_string(i, send_buffer, (message_lenght==0)?strlen(send_buffer)+1:message_lenght);
 					if(ret == 0 || ret == -1) {
 						remove_client(i, &master);
 						continue;
