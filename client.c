@@ -12,6 +12,8 @@
 
 #include <errno.h>
 
+#include <ctype.h>
+
 //libreria per il pack dei dati
 #include "lib/commlib.h"
 
@@ -24,6 +26,233 @@ void print_help()
 	printf("!who --> mostra l'elenco dei client connessi al server\n");
 	printf("!connect username --> avvia una partita con l\'utente username\n");
 	printf("!quit --> disconnette il client dal server\n");
+}
+
+int initialize_udp_server(int port)
+{
+	//(socket remoto, TCP, sempre zero)
+	int sock_udp = socket(AF_INET, SOCK_DGRAM, 0);
+
+	struct sockaddr_in my_addr;
+	memset(&my_addr, 0, sizeof(my_addr));
+	my_addr.sin_family = AF_INET;
+	my_addr.sin_port = port;
+	inet_pton(AF_INET, "0.0.0.0", &my_addr.sin_addr);
+
+	if(bind(sock_udp, (struct sockaddr*)&my_addr, sizeof(my_addr)) == -1)
+	{
+		perror("Bind UDP fallita:");
+		exit(1);
+	}
+
+	return sock_udp;
+}
+
+enum my_area_status {WATER, SHIP, DIEDSHIP};
+enum my_area_status my_grid[7][7];
+
+enum enemy_area_status {UNKNOWN, NOHIT, HIT};
+enum enemy_area_status enemy_grid[7][7];
+
+void print_game_help()
+{
+	printf("Sono disponibili i seguenti comandi:\n");
+	printf("!help --> mostra l'elenco dei comandi disponibili\n");
+	printf("!disconnect --> disconnette il client dall'attuale partita\n");
+	printf("!shot square --> fai un tentativo con la casella square\n");
+	printf("!show --> visualizza griglia di gioco \n");
+}
+
+void clear_grids()
+{
+	int i, j;
+	for(i=0; i<7; i++)
+		for(j=0; j<7; j++)
+		{
+			my_grid[i][j]=WATER;
+			enemy_grid[i][j]=UNKNOWN;
+		}
+}
+
+void print_hor_delim()
+{
+	int j;
+	printf("   ");
+	for(j=0; j<7; j++)
+		printf("--");
+	for(j=0; j<5; j++)
+		printf("  ");
+	printf("    ");
+	for(j=0; j<7; j++)
+		printf("--");
+	printf("\n");
+}
+
+void show_grids()
+{
+	int i, j;
+
+	print_hor_delim();
+
+	for(i=0; i<7; i++)
+	{
+		printf("%d |", i);
+		for(j=0; j<7; j++)
+		{
+			char toprint;
+			switch(my_grid[i][j])
+			{
+				case WATER: toprint=' '; break;
+				case SHIP: toprint='$'; break;
+				case DIEDSHIP: toprint='X'; break;
+			}
+			printf("%c ", toprint);
+		}
+
+		printf("|");
+		for(j=0; j<5; j++)
+				printf("  ");
+
+		printf("%d |", i);
+		for(j=0; j<7; j++)
+		{
+			char toprint;
+			switch(enemy_grid[i][j])
+			{
+				case UNKNOWN: toprint=' '; break;
+				case NOHIT: toprint='~'; break;
+				case HIT: toprint='X'; break;
+			}
+			printf("%c ", toprint);
+		}
+		printf("|");
+		printf("\n");
+	}
+
+	print_hor_delim();
+
+	printf("   ");
+	for(j=0; j<7; j++)
+		printf("%c ", 'A'+j);
+	for(j=0; j<5; j++)
+		printf("  ");
+	printf("    ");
+	for(j=0; j<7; j++)
+		printf("%c ", 'A'+j);
+	printf("\n");
+}
+
+int check_text_position(char * str)
+{
+	if(strlen(str)!=2)
+		return -1;
+	if(!isalpha(str[0]) || !isdigit(str[1]))
+		return -1;
+	if(str[0]-'a' >= 7)
+		return -1;
+
+	return 1;
+}
+
+enum my_area_status * get_my_coords(char * str)
+{
+	if(check_text_position(str)==-1)
+		return NULL;
+
+	str[0] = tolower(str[0]);
+	return &my_grid[ (int)(str[0]-'a') ][ (int)(str[1]-'0') ];
+}
+
+enum enemy_area_status * get_enemy_coords(char * str)
+{
+	if(check_text_position(str)==-1)
+		return NULL;
+
+	str[0] = tolower(str[0]);
+	return &enemy_grid[ (int)(str[0]-'a') ][ (int)(str[1]-'0') ];
+}
+
+int place_ship(char * str)
+{
+	if(check_text_position(str)==-1)
+		return -1;
+
+	enum my_area_status * area = get_my_coords(str);
+	if(*area!=WATER)
+		return -2;
+
+	*area=SHIP;
+
+	return 1;
+}
+
+void ask_ships_position()
+{
+	printf("Posiziona 7 caselle:\n");
+	int i=0;
+	char str[10];
+	while(i!=7)
+	{
+		scanf("%s", str);
+		if(check_text_position(str)==-1)
+			printf("Hai inserito una cordinata errata, riprova.\n");
+		else
+		{
+			if(place_ship(str)==-2)
+				printf("E' già presente una nave su quella casella, riprova.\n");
+			else
+				i++;
+		}
+	}
+}
+
+void game_cmd_shot(int sock_client_udp)
+{
+	char str[20];
+	scanf("%s", str);
+
+	if(check_text_position(str)==-1)
+	{
+		printf("La posizione inserita è invalida!\n");
+		return;
+	}
+
+	enum enemy_area_status * enemy_area = get_enemy_coords(str);
+	if(*enemy_area!=UNKNOWN)
+	{
+		printf("Hai già colpito questa posizione!\n");
+		return;
+	}
+
+	//invia messaggio udp con cordinate
+
+	//ricevi nuovo stato
+}
+
+void start_game_console(int sock_client_udp)
+{
+	clear_grids();
+	ask_ships_position();
+	for(;;)
+	{
+		printf("# ");
+		fflush(stdout);
+
+		scanf("%s", buffer);
+
+		if(!strcmp(buffer, "!help")) {
+			print_game_help();
+		}
+		else if(!strcmp(buffer, "!disconnect")) {
+
+		}
+		else if(!strcmp(buffer, "!shot")) {
+			game_cmd_shot(sock_client_udp);
+		}
+		else if(!strcmp(buffer, "!show")) {
+			show_grids();
+		}
+	}
 }
 
 int cmd_connect(int sock_client, char * username)
@@ -89,7 +318,7 @@ int main(int argc, char * argv[])
 	}
 	porta=atoi(argv[2]);
 
-	//(socket remoto, TCP, sempre zero)
+	// creo il socket TCP
 	int sock_client = socket(AF_INET, SOCK_STREAM, 0);
 
 	struct sockaddr_in srv_addr;
@@ -97,8 +326,8 @@ int main(int argc, char * argv[])
 	srv_addr.sin_family = AF_INET;
 	srv_addr.sin_port = htons(porta);
 	inet_pton(AF_INET, argv[1], &srv_addr.sin_addr);
-
 	
+	// effettuo la connect al server indicato
 	if(connect(sock_client, (struct sockaddr *)&srv_addr, sizeof(srv_addr)) == -1)
 	{
 		perror("Connect fallita");
@@ -109,6 +338,7 @@ int main(int argc, char * argv[])
 	print_help();
 	
 	// ------ prima fase: richiesta di inserimento username e porta d'ascolto
+	int udp_port;
 	while(1)
 	{
 		//richiedo username e porta
@@ -121,6 +351,8 @@ int main(int argc, char * argv[])
 		scanf("%s", user_str);
 		printf("Inserisci la porta UDP di ascolto: ");
 		scanf("%s", port_str);
+
+		udp_port=atoi(port_str);
 
 		//pacco i dati inseriti e li invio
 		char * params[3]; params[0]=prefix_str; params[1]=user_str; params[2]=port_str;
@@ -158,6 +390,9 @@ int main(int argc, char * argv[])
 		}
 	}
 
+	//setto il server udp, mi metterò in ascolto dopo
+	int sock_udp = initialize_udp_server(udp_port);
+
 	// ------ seconda fase: invio comandi a server tcp e ricezione di richieste di gioco
 	fd_set master, read_fd;
 	FD_ZERO(&master);
@@ -165,7 +400,7 @@ int main(int argc, char * argv[])
 	FD_SET(0, &master);
 	FD_SET(sock_client, &master);
 
-	while(1)
+	for(;;)
 	{
 		// prompt console per comando
 		printf("> ");
@@ -175,6 +410,7 @@ int main(int argc, char * argv[])
 		select(sock_client+1, &read_fd, NULL, NULL, NULL);
 		if(FD_ISSET(0, &read_fd))
 		{
+
 			scanf("%s", buffer);
 
 			// parso il comando
@@ -208,7 +444,8 @@ int main(int argc, char * argv[])
 						break;
 					case 1:
 						printf("Connessione riuscita!\n");
-						break;
+						start_game_console(sock_udp);
+						continue;
 				}
 			}
 			if(!strcmp(buffer, "!who"))
@@ -260,7 +497,10 @@ int main(int argc, char * argv[])
 
 				//comunico la mia risposta al server (che la reindirizzerà al client)
 				if(resp=='y')
+				{
 					ret = send_variable_string(sock_client, "CONNECTACCEPT", 14);
+					start_game_console(sock_udp);
+				}
 				else
 					ret = send_variable_string(sock_client, "CONNECTDECLINE", 15);
 
@@ -275,6 +515,7 @@ int main(int argc, char * argv[])
 	}
 
 	close(sock_client);
+	close(sock_udp);
 	return 0;
 }
 
