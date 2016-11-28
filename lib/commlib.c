@@ -95,3 +95,73 @@ int pack_eos(char * mul_str, char ** string_pointers, int n_str)
 
 	return buff_next_index;
 }
+
+// FUNZIONI PER L'UDP
+int udp_send_coords(int sock_client_udp, struct sockaddr_in udp_srv_addr, char coord1, char coord2)
+{
+	//printf("udp_send_coords: %c%c\n", coord1, coord2);
+	char buffer[]={coord1, coord2};
+	int ret = sendto(sock_client_udp, (void*)&buffer, 2, 0, (struct sockaddr*)&udp_srv_addr, sizeof(udp_srv_addr));
+	if(ret == 0 || ret == -1)
+	{
+		perror("udp_send_coords error: ");
+		return ret;
+	}
+	if(ret < 2)
+		return -1;
+
+	return 1;
+}
+
+int udp_receive_coords(int sock_client_udp, struct sockaddr_in udp_srv_addr, char * coord1, char * coord2)
+{
+	//printf("udp_receive_coords: \n");
+	char buffer[2];
+	int addrlen=sizeof(udp_srv_addr);
+	int ret = recvfrom(sock_client_udp, (void*)&buffer, 2, 0, (struct sockaddr*)&udp_srv_addr, (socklen_t*)&addrlen);
+	if(ret == 0 || ret == -1)
+	{
+		perror("udp_receive_coords error: ");
+		return ret;
+	}
+	if(ret < 2)
+		return -1;
+
+	*coord1=buffer[0];
+	*coord2=buffer[1];
+
+	return 1;
+}
+
+enum response_code {R_ERROR, R_HIT, R_NOTHIT};
+
+int udp_send_response_status(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum response_code resp)
+{
+	//printf("udp_send_response_status: %s length %d\n", (resp==R_ERROR) ? "R_ERROR" : (resp==R_HIT) ? "R_HIT" : "R_NOTHIT",(int)sizeof(resp));
+	int ret = sendto(sock_client_udp, (void*)&resp, sizeof(resp), 0, (struct sockaddr*)&udp_srv_addr, sizeof(udp_srv_addr));
+	if(ret == 0 || ret == -1)
+	{
+		perror("udp_send_response_status error: ");
+		return ret;
+	}
+	if(ret < 2)
+		return -1;
+
+	return 1;
+}
+
+int udp_receive_response_status(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum response_code * resp)
+{
+	//printf("udp_receive_response_status: length %d\n", (int)sizeof(*resp));
+	int addrlen=sizeof(udp_srv_addr);
+	int ret = recvfrom(sock_client_udp, (void*)resp, sizeof(*resp), 0, (struct sockaddr*)&udp_srv_addr, (socklen_t*)&addrlen);
+	if(ret == 0 || ret == -1)
+	{
+		perror("udp_receive_response_status error: ");
+		return ret;
+	}
+	if(ret < 2)
+		return -1;
+	//printf("udp_receive_response_status: %s length %d\n", (*resp==R_ERROR) ? "R_ERROR" : (*resp==R_HIT) ? "R_HIT" : "R_NOTHIT", (int)sizeof(*resp));
+	return 1;
+}

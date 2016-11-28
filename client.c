@@ -36,7 +36,7 @@ int initialize_udp_server(int port)
 	struct sockaddr_in my_addr;
 	memset(&my_addr, 0, sizeof(my_addr));
 	my_addr.sin_family = AF_INET;
-	my_addr.sin_port = port;
+	my_addr.sin_port = htons(port);
 	inet_pton(AF_INET, "0.0.0.0", &my_addr.sin_addr);
 
 	if(bind(sock_udp, (struct sockaddr*)&my_addr, sizeof(my_addr)) == -1)
@@ -53,6 +53,8 @@ enum my_area_status my_grid[7][7];
 
 enum enemy_area_status {UNKNOWN, NOHIT, HIT};
 enum enemy_area_status enemy_grid[7][7];
+
+int ismyturn=0;
 
 void print_game_help()
 {
@@ -148,7 +150,7 @@ int check_text_position(char * str)
 		return -1;
 	if(!isalpha(str[0]) || !isdigit(str[1]))
 		return -1;
-	if(str[0]-'a' >= 7)
+	if(str[0]-'a' >= 7 || str[1]-'0' >= 7)
 		return -1;
 
 	return 1;
@@ -160,7 +162,7 @@ enum my_area_status * get_my_coords(char * str)
 		return NULL;
 
 	str[0] = tolower(str[0]);
-	return &my_grid[ (int)(str[0]-'a') ][ (int)(str[1]-'0') ];
+	return &my_grid[ (int)(str[1]-'0') ][ (int)(str[0]-'a') ];
 }
 
 enum enemy_area_status * get_enemy_coords(char * str)
@@ -169,7 +171,7 @@ enum enemy_area_status * get_enemy_coords(char * str)
 		return NULL;
 
 	str[0] = tolower(str[0]);
-	return &enemy_grid[ (int)(str[0]-'a') ][ (int)(str[1]-'0') ];
+	return &enemy_grid[ (int)(str[1]-'0') ][ (int)(str[0]-'a') ];
 }
 
 int place_ship(char * str)
@@ -206,7 +208,56 @@ void ask_ships_position()
 	}
 }
 
-void game_cmd_shot(int sock_client_udp)
+void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_addr)
+{
+	printf("E' il turno dell'avversario!\n");
+	//ricevo messaggio udp con cordinate
+	char coords[3];
+	int ret = udp_receive_coords(sock_client_udp, udp_srv_addr, &coords[0], &coords[1]);
+	if(ret==0 || ret==-1)
+	{
+		printf("Ricezione UDP non riuscita (ricezione coordinate)!\n");
+		return;
+	}
+	coords[2]='\0';
+
+	enum response_code resp;
+	if(check_text_position(coords)==-1)
+	{
+		printf("La posizione inviata dal client è invalida!\n");
+		resp=R_ERROR;
+	}
+
+	enum my_area_status * my_area = get_my_coords(coords);
+	if(*my_area==DIEDSHIP)
+	{
+		printf("Il client ha già colpito questa posizione!\n");
+		resp=R_ERROR;
+	}
+	else if(*my_area==WATER)
+	{
+		printf("Il client ha colpito %s, ma c'era acqua\n", coords);
+		resp=R_NOTHIT;
+	}
+	else if(*my_area==SHIP)
+	{
+		printf("Il client ha colpito e affondato %s\n", coords);
+		*my_area=DIEDSHIP;
+		resp=R_HIT;
+	}
+	
+	//invio lo stato al client
+	ret = udp_send_response_status(sock_client_udp, udp_srv_addr, resp);
+	if(ret==0 || ret==-1)
+	{
+		printf("Invio UDP non riuscito (invio errore)!\n");
+		return;
+	}
+
+	printf("E' il tuo turno!\n");
+}
+
+void game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
 {
 	char str[20];
 	scanf("%s", str);
@@ -225,14 +276,58 @@ void game_cmd_shot(int sock_client_udp)
 	}
 
 	//invia messaggio udp con cordinate
+	int ret = udp_send_coords(sock_client_udp, udp_srv_addr, str[0], str[1]);
+	if(ret==0 || ret==-1)
+	{
+		printf("Invio UDP non riuscito (invio coordinate)!\n");
+		return;
+	}
 
 	//ricevi nuovo stato
+	enum response_code resp;
+	ret = udp_receive_response_status(sock_client_udp, udp_srv_addr, &resp);
+	if(ret==0 || ret==-1 || resp==R_ERROR)
+	{
+		printf("Ricezione UDP non riuscita (ricezione stato)!\n");
+		return;
+	}
+
+	if(resp==R_HIT)
+	{
+		*enemy_area=HIT;
+		printf("?? dice: colpito! :)\n\n");
+	}
+	else if(resp==R_NOTHIT)
+	{
+		*enemy_area=NOHIT;
+		printf("?? dice: mancato :(\n\n");
+	}
+	
+	other_client_coords_turn(sock_client_udp, udp_srv_addr);
 }
 
-void start_game_console(int sock_client_udp)
+void start_game_console(int sock_client_udp, char * address, char * port, int isfirst)
 {
+	// fase di connessione al server udp (l'altro client)
+	struct sockaddr_in udp_srv_addr;
+
+	memset(&udp_srv_addr, 0, sizeof(udp_srv_addr));
+	udp_srv_addr.sin_family = AF_INET;
+	udp_srv_addr.sin_port = htons(atoi(port));
+	inet_pton(AF_INET, address, &udp_srv_addr.sin_addr);
+
 	clear_grids();
 	ask_ships_position();
+
+	printf("Mi connetto su %s porta %d\n", address, atoi(port));
+
+	//se inizio prima posso passare alla console, altrimenti devo
+	//attendere la mossa dell'altro client
+	if(isfirst==0)
+		other_client_coords_turn(sock_client_udp, udp_srv_addr);
+	else
+		printf("E' il tuo turno!\n");
+
 	for(;;)
 	{
 		printf("# ");
@@ -247,7 +342,7 @@ void start_game_console(int sock_client_udp)
 
 		}
 		else if(!strcmp(buffer, "!shot")) {
-			game_cmd_shot(sock_client_udp);
+			game_cmd_shot(sock_client_udp, udp_srv_addr);
 		}
 		else if(!strcmp(buffer, "!show")) {
 			show_grids();
@@ -255,7 +350,7 @@ void start_game_console(int sock_client_udp)
 	}
 }
 
-int cmd_connect(int sock_client, char * username)
+int cmd_connect(int sock_client, char * username, char * res_address, char * res_port)
 {
 	char prefix_str[]="!connect";
 
@@ -300,7 +395,10 @@ int cmd_connect(int sock_client, char * username)
 			return -1; //messaggio mal formato
 		}
 		
-		//FARE COSE UDP
+		//Restituisco le stringhe ricevute (indirizzo e porta)
+		strcpy(res_address, strs[1]);
+		strcpy(res_port, strs[2]);
+
 		return 1;
 	}
 
@@ -425,7 +523,9 @@ int main(int argc, char * argv[])
 			{
 				char username[20];
 				scanf("%s", username);
-				switch(cmd_connect(sock_client, username))
+				char res_address[30];
+				char res_port[5];
+				switch(cmd_connect(sock_client, username, res_address, res_port))
 				{
 					case -1:
 						printf("Errore generico!\n");
@@ -444,7 +544,7 @@ int main(int argc, char * argv[])
 						break;
 					case 1:
 						printf("Connessione riuscita!\n");
-						start_game_console(sock_udp);
+						start_game_console(sock_udp, res_address, res_port, 1);
 						continue;
 				}
 			}
@@ -499,7 +599,7 @@ int main(int argc, char * argv[])
 				if(resp=='y')
 				{
 					ret = send_variable_string(sock_client, "CONNECTACCEPT", 14);
-					start_game_console(sock_udp);
+					start_game_console(sock_udp, strs[2], strs[3], 0);
 				}
 				else
 					ret = send_variable_string(sock_client, "CONNECTDECLINE", 15);
