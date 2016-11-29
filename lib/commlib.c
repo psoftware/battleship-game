@@ -24,6 +24,8 @@ int recv_variable_string(int cl_sock, char * buff)
 	if(ret == 0 || ret == -1)
 		return ret;
 
+	bytes_count=ntohl(bytes_count);
+
 	//faccio una recv di nbyte ricevuti dalla recv precedente
 	ret = recv(cl_sock, (void*)buff, bytes_count, MSG_WAITALL);
 	if(ret == 0 || ret == -1)
@@ -40,7 +42,8 @@ int recv_variable_string(int cl_sock, char * buff)
 int send_variable_string(int cl_sock, char * buff, int bytes_count)
 {
 	//faccio una send del numero di byte che devo spedire
-	int ret = send(cl_sock, (unsigned int*)&bytes_count, BYTE_LENGTH_COUNT, 0);
+	int net_bytes_count = htonl(bytes_count);
+	int ret = send(cl_sock, (unsigned int*)&net_bytes_count, BYTE_LENGTH_COUNT, 0);
 	if(ret == 0 || ret == -1)
 		return ret;
 

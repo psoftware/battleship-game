@@ -190,7 +190,7 @@ int place_ship(char * str)
 
 void ask_ships_position()
 {
-	printf("Posiziona 7 caselle:\n");
+	printf("Posiziona 7 caselle nel formato <lettera><numero> (es. a2):\n");
 	int i=0;
 	char str[10];
 	while(i!=7)
