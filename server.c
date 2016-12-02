@@ -303,6 +303,32 @@ int cmd_disconnect_request(int cl_sock)
 	return 1;
 }
 
+int cmd_ilose_request(int cl_sock)
+{
+	des_client * cl_des = des_client_find(client_list, cl_sock);
+	if(!cl_des) // MANCA UNA CONDIZIONE (client in attesa)
+	{
+		printf("cmd_ilose_request: cl_des non trovato\n");
+		return -1;
+	}
+
+	des_client * dest_des = des_client_find(client_list, cl_des->req_conn_sock);
+	if(!dest_des || dest_des->status!=INGAME)
+	{
+		printf("cmd_ilose_request: dest_des %d non trovato oppure non sta giocando\n", cl_des->req_conn_sock);
+		return -1;
+	}
+
+	int ret = send_variable_string(cl_des->req_conn_sock, "WINNOTIFY", strlen("WINNOTIFY")+1);
+	if(ret==0 || ret==-1)
+		return ret;
+
+	cl_des->status=READY;
+	dest_des->status=READY;
+
+	return 1;
+}
+
 /**** MAIN ****/
 
 int main(int argc, char * argv[])
@@ -445,6 +471,11 @@ int main(int argc, char * argv[])
 					else if(!strcmp(rec_buffer, "DISCONNECTREQ"))	// Il client si è arreso
 					{
 						cmd_disconnect_request(i);
+						continue;									// Non è prevista risposta al client mittente
+					}
+					else if(!strcmp(rec_buffer, "ILOSEREQ"))	// Il client ha riconosciuto di aver perso
+					{
+						cmd_ilose_request(i);
 						continue;									// Non è prevista risposta al client mittente
 					}
 					else

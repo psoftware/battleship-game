@@ -53,9 +53,11 @@ int initialize_udp_server(int port)
 
 enum my_area_status {WATER, SHIP, DIEDSHIP};
 enum my_area_status my_grid[7][7];
+int my_success_hit = 0;
 
 enum enemy_area_status {UNKNOWN, NOHIT, HIT};
 enum enemy_area_status enemy_grid[7][7];
+int enemy_success_hit = 0;
 
 int ismyturn=0;
 
@@ -77,6 +79,9 @@ void clear_grids()
 			my_grid[i][j]=WATER;
 			enemy_grid[i][j]=UNKNOWN;
 		}
+
+	my_success_hit=0;
+	enemy_success_hit=0;
 }
 
 void print_hor_delim()
@@ -245,10 +250,15 @@ void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_ad
 	else if(*my_area==SHIP)
 	{
 		printf("Il client ha colpito e affondato %s\n", coords);
+		enemy_success_hit++;
 		*my_area=DIEDSHIP;
 		resp=R_HIT;
 	}
 	
+	//invio lo stato solo se non ho perso, altrimenti procederò con una richiesta di disconnessione (vedi nel multiplexing udp)
+	if(enemy_success_hit==7)
+		return;
+
 	//invio lo stato al client
 	ret = udp_send_response_status(sock_client_udp, udp_srv_addr, resp);
 	if(ret==0 || ret==-1)
@@ -302,6 +312,7 @@ void game_shot_response(int sock_client_udp, struct sockaddr_in udp_srv_addr, en
 
 	if(resp==R_HIT)
 	{
+		my_success_hit++;
 		*enemy_area=HIT;
 		printf("?? dice: colpito! :)\n\n");
 	}
@@ -395,6 +406,12 @@ int cmd_connect(int sock_client, char * username, char * res_address, char * res
 int cmd_disconnect(int sock_client)
 {
 	int ret = send_variable_string(sock_client, "DISCONNECTREQ", strlen("DISCONNECTREQ")+1);
+	return ret;
+}
+
+int cmd_you_win(int sock_client)
+{
+	int ret = send_variable_string(sock_client, "ILOSEREQ", strlen("ILOSEREQ")+1);
 	return ret;
 }
 
@@ -651,6 +668,10 @@ int main(int argc, char * argv[])
 			else if(!strcmp(strs[0], "DISCONNECTNOTIFY")){
 				printf("Il client si è arreso. Hai vinto la partita!\n");
 				cl_stat=TCPCOMM;
+			}
+			else if(!strcmp(strs[0], "WINNOTIFY")){
+				printf("\n\nHai vinto la partita!\n");
+				cl_stat=TCPCOMM;
 			} 
 			else
 				printf("Comando non riconosciuto: %s", strs[0]);
@@ -666,7 +687,19 @@ int main(int argc, char * argv[])
 			else if(cl_stat==WAIT_UDP_COORDS)
 			{
 				other_client_coords_turn(sock_udp, udp_srv_addr);
-				cl_stat=INGAME;
+				if(enemy_success_hit==7)			// se tutte le mie navi sono state affondate allora
+				{									// provvedo a notificare la mia sconfitta.
+					printf("\nHai perso la partita!\n\n");
+					cmd_you_win(sock_client);	// NON E' DETTO CHE LA RISPOSTA UDP ARRIVI SEMPRE PRIMA DELLA TCP!
+					cl_stat=TCPCOMM;
+				}
+				else
+					cl_stat=INGAME;
+			}
+			else
+			{
+				printf("Risposta udp ricevuta fuori sync!\n");
+				break;
 			}
 		}
 	}
