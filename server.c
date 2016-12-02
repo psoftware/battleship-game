@@ -28,7 +28,7 @@ typedef struct des_clients
 	char address[15];
 	char port[5];
 
-	int req_conn_sock;		//in questo campo viene temporaneamente depositato il socket del client in attesa di connettersi
+	int req_conn_sock;		//in questo campo viene depositato il socket del client in attesa di connettersi o connesso
 	enum cl_status status;
 
 	struct des_clients * next;
@@ -253,6 +253,8 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 		cl_des->status=INGAME;
 		dest_des->status=INGAME;
 
+		cl_des->req_conn_sock=dest_sock;
+
 		char prefix[]="CONNECTOK";
 		char * params[3];
 		params[0]=prefix; params[1]=dest_des->address; params[2]=dest_des->port;
@@ -271,6 +273,32 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 	int ret = send_variable_string(dest_des->req_conn_sock, temp_buffer, message_lenght);
 	if(ret==0 || ret==-1)
 		remove_client(dest_des->req_conn_sock, master);
+
+	return 1;
+}
+
+int cmd_disconnect_request(int cl_sock)
+{
+	des_client * cl_des = des_client_find(client_list, cl_sock);
+	if(!cl_des) // MANCA UNA CONDIZIONE (client in attesa)
+	{
+		printf("cmd_disconnect_request: cl_des non trovato\n");
+		return -1;
+	}
+
+	des_client * dest_des = des_client_find(client_list, cl_des->req_conn_sock);
+	if(!dest_des || dest_des->status!=INGAME)
+	{
+		printf("cmd_disconnect_request: dest_des %d non trovato oppure non sta giocando\n", cl_des->req_conn_sock);
+		return -1;
+	}
+
+	int ret = send_variable_string(cl_des->req_conn_sock, "DISCONNECTNOTIFY", strlen("DISCONNECTNOTIFY")+1);
+	if(ret==0 || ret==-1)
+		return ret;
+
+	cl_des->status=READY;
+	dest_des->status=READY;
 
 	return 1;
 }
@@ -407,12 +435,17 @@ int main(int argc, char * argv[])
 					else if(!strcmp(rec_buffer, "CONNECTACCEPT"))	// mando risposta al client che 
 					{												// aveva fatto precedentemente richiesta (accettato)
 						cmd_reply_connect(i, &master, 1);
-						continue;									// Non è prevista risposta al client
+						continue;									// Non è prevista risposta al client mittente
 					}
 					else if(!strcmp(rec_buffer, "CONNECTDECLINE"))	// mando risposta al client che 
 					{												// aveva fatto precedentemente richiesta (rifiutato)
 						cmd_reply_connect(i, &master, 0);
-						continue;									// Non è prevista risposta al client
+						continue;									// Non è prevista risposta al client mittente
+					}
+					else if(!strcmp(rec_buffer, "DISCONNECTREQ"))	// Il client si è arreso
+					{
+						cmd_disconnect_request(i);
+						continue;									// Non è prevista risposta al client mittente
 					}
 					else
 					{

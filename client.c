@@ -392,6 +392,12 @@ int cmd_connect(int sock_client, char * username, char * res_address, char * res
 	return -1; //in teoria non ci si dovrebbe arrivare qui, quindi nel caso segnalo errore generico
 }
 
+int cmd_disconnect(int sock_client)
+{
+	int ret = send_variable_string(sock_client, "DISCONNECTREQ", strlen("DISCONNECTREQ")+1);
+	return ret;
+}
+
 void set_stdin_select(fd_set* fd, bool set)
 {
 	if(!FD_ISSET(0, fd) && set)
@@ -589,7 +595,8 @@ int main(int argc, char * argv[])
 					print_game_help();
 				}
 				else if(!strcmp(buffer, "!disconnect")) {
-
+					cmd_disconnect(sock_client);	//mando in TCP la richiesta di disconnessione
+					cl_stat=TCPCOMM;
 				}
 				else if(!strcmp(buffer, "!shot")) {
 					shooting_area=game_cmd_shot(sock_udp, udp_srv_addr);
@@ -641,6 +648,10 @@ int main(int argc, char * argv[])
 				else
 					ret = send_variable_string(sock_client, "CONNECTDECLINE", 15);
 			}
+			else if(!strcmp(strs[0], "DISCONNECTNOTIFY")){
+				printf("Il client si è arreso. Hai vinto la partita!\n");
+				cl_stat=TCPCOMM;
+			} 
 			else
 				printf("Comando non riconosciuto: %s", strs[0]);
 		}
