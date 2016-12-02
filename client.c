@@ -17,6 +17,9 @@
 //libreria per il pack dei dati
 #include "lib/commlib.h"
 
+typedef enum { false, true } bool;
+enum client_status {TCPCOMM, INGAME, WAIT_UDP_STATUS, WAIT_UDP_COORDS};
+
 char buffer[1024];
 
 void print_help()
@@ -257,7 +260,7 @@ void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_ad
 	printf("E' il tuo turno!\n");
 }
 
-void game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
+enum enemy_area_status * game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
 {
 	char str[20];
 	scanf("%s", str);
@@ -265,14 +268,14 @@ void game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
 	if(check_text_position(str)==-1)
 	{
 		printf("La posizione inserita è invalida!\n");
-		return;
+		return 0;
 	}
 
 	enum enemy_area_status * enemy_area = get_enemy_coords(str);
 	if(*enemy_area!=UNKNOWN)
 	{
 		printf("Hai già colpito questa posizione!\n");
-		return;
+		return 0;
 	}
 
 	//invia messaggio udp con cordinate
@@ -280,12 +283,17 @@ void game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
 	if(ret==0 || ret==-1)
 	{
 		printf("Invio UDP non riuscito (invio coordinate)!\n");
-		return;
+		return 0;
 	}
 
+	return enemy_area;
+}
+
+void game_shot_response(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum enemy_area_status * enemy_area)
+{
 	//ricevi nuovo stato
 	enum response_code resp;
-	ret = udp_receive_response_status(sock_client_udp, udp_srv_addr, &resp);
+	int ret = udp_receive_response_status(sock_client_udp, udp_srv_addr, &resp);
 	if(ret==0 || ret==-1 || resp==R_ERROR)
 	{
 		printf("Ricezione UDP non riuscita (ricezione stato)!\n");
@@ -302,11 +310,9 @@ void game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
 		*enemy_area=NOHIT;
 		printf("?? dice: mancato :(\n\n");
 	}
-	
-	other_client_coords_turn(sock_client_udp, udp_srv_addr);
 }
 
-void start_game_console(int sock_client_udp, char * address, char * port, int isfirst)
+struct sockaddr_in init_udp_game(int sock_client_udp, char * address, char * port, int isfirst)
 {
 	// fase di connessione al server udp (l'altro client)
 	struct sockaddr_in udp_srv_addr;
@@ -323,31 +329,12 @@ void start_game_console(int sock_client_udp, char * address, char * port, int is
 
 	//se inizio prima posso passare alla console, altrimenti devo
 	//attendere la mossa dell'altro client
-	if(isfirst==0)
+	/*if(isfirst==0)
 		other_client_coords_turn(sock_client_udp, udp_srv_addr);
 	else
-		printf("E' il tuo turno!\n");
+		printf("E' il tuo turno!\n");*/
 
-	for(;;)
-	{
-		printf("# ");
-		fflush(stdout);
-
-		scanf("%s", buffer);
-
-		if(!strcmp(buffer, "!help")) {
-			print_game_help();
-		}
-		else if(!strcmp(buffer, "!disconnect")) {
-
-		}
-		else if(!strcmp(buffer, "!shot")) {
-			game_cmd_shot(sock_client_udp, udp_srv_addr);
-		}
-		else if(!strcmp(buffer, "!show")) {
-			show_grids();
-		}
-	}
+	return udp_srv_addr;
 }
 
 int cmd_connect(int sock_client, char * username, char * res_address, char * res_port)
@@ -403,6 +390,14 @@ int cmd_connect(int sock_client, char * username, char * res_address, char * res
 	}
 
 	return -1; //in teoria non ci si dovrebbe arrivare qui, quindi nel caso segnalo errore generico
+}
+
+void set_stdin_select(fd_set* fd, bool set)
+{
+	if(!FD_ISSET(0, fd) && set)
+		FD_SET(0, fd);
+	else if(FD_ISSET(0, fd) && !set)
+		FD_CLR(0, fd);
 }
 
 int main(int argc, char * argv[])
@@ -491,79 +486,122 @@ int main(int argc, char * argv[])
 	//setto il server udp, mi metterò in ascolto dopo
 	int sock_udp = initialize_udp_server(udp_port);
 
+	//definisco il sockaddr che utilizzero per memorizzare l'indirizzo del client a cui manderò i dati UDP
+	struct sockaddr_in udp_srv_addr;
+
+	//definisco una variabile che conterrà la casella che sto shootando, visto che la risposta UDP è multiplexata
+	enum enemy_area_status * shooting_area;
+
 	// ------ seconda fase: invio comandi a server tcp e ricezione di richieste di gioco
 	fd_set master, read_fd;
 	FD_ZERO(&master);
 	FD_ZERO(&read_fd);
-	FD_SET(0, &master);
+	set_stdin_select(&master, true);
 	FD_SET(sock_client, &master);
+	FD_SET(sock_udp, &master);
 
+	enum client_status cl_stat=TCPCOMM;
 	for(;;)
 	{
 		// prompt console per comando
-		printf("> ");
-		fflush(stdout);
+		if(cl_stat==WAIT_UDP_STATUS || cl_stat==WAIT_UDP_COORDS)
+			set_stdin_select(&master, false);	//disabilito temporaneamente lo sblocco su select causato da stdin
+		else
+		{
+			if(cl_stat==0)
+				printf("> ");
+			else
+				printf("# ");
+			fflush(stdout);
+			set_stdin_select(&master, true);
+		}
 
 		read_fd = master;
-		select(sock_client+1, &read_fd, NULL, NULL, NULL);
+		select((sock_client>sock_udp) ? sock_client+1 : sock_udp+1, &read_fd, NULL, NULL, NULL);
 		if(FD_ISSET(0, &read_fd))
 		{
 
 			scanf("%s", buffer);
 
-			// parso il comando
-			if(!strcmp(buffer, "!quit"))
-				break;
-			if(!strcmp(buffer, "!help"))
+			if(cl_stat==TCPCOMM)
 			{
-				print_help();
-				continue;
-			}
-			if(!strcmp(buffer, "!connect"))
-			{
-				char username[20];
-				scanf("%s", username);
-				char res_address[30];
-				char res_port[5];
-				switch(cmd_connect(sock_client, username, res_address, res_port))
+				// parso il comando
+				if(!strcmp(buffer, "!quit"))
+					break;
+				if(!strcmp(buffer, "!help"))
 				{
-					case -1:
-						printf("Errore generico!\n");
-						break;
-					case -2:
-						printf("Non puoi giocare con te stesso!\n");
-						break;
-					case -3:
-						printf("L'utente inserito non esiste!\n");
-						break;
-					case -4:
-						printf("L'utente inserito già sta giocando!\n");
-						break;
-					case -5:
-						printf("L'utente inserito ha rifiutato la tua richiesta!\n");
-						break;
-					case 1:
-						printf("Connessione riuscita!\n");
-						start_game_console(sock_udp, res_address, res_port, 1);
-						continue;
+					print_help();
+					continue;
 				}
-			}
-			if(!strcmp(buffer, "!who"))
-			{
-				ret = send_variable_string(sock_client, "!who", 5);
+				if(!strcmp(buffer, "!connect"))
+				{
+					char username[20];
+					scanf("%s", username);
+					char res_address[30];
+					char res_port[5];
+					switch(cmd_connect(sock_client, username, res_address, res_port))
+					{
+						case -1:
+							printf("Errore generico!\n");
+							break;
+						case -2:
+							printf("Non puoi giocare con te stesso!\n");
+							break;
+						case -3:
+							printf("L'utente inserito non esiste!\n");
+							break;
+						case -4:
+							printf("L'utente inserito già sta giocando!\n");
+							break;
+						case -5:
+							printf("L'utente inserito ha rifiutato la tua richiesta!\n");
+							break;
+						case 1:
+							printf("Connessione riuscita!\n");
+							cl_stat=INGAME;
+							udp_srv_addr = init_udp_game(sock_udp, res_address, res_port, 1);
+							char asd[15];
+							inet_ntop(AF_INET, (struct sockaddr*)&udp_srv_addr.sin_addr, asd, 15);
+							printf("Riferimento client %s\n", asd);
+							continue;
+					}
+				}
+				if(!strcmp(buffer, "!who"))
+				{
+					ret = send_variable_string(sock_client, "!who", 5);
+					if(ret == 0 || ret == -1)
+						break;
+				}
+				else
+					continue;
+
+				// ricevo la risposta dal server (non ho bisogno di multiplexare perchè ricevo risposte a comandi inviati)
+				ret = recv_variable_string(sock_client, buffer);
 				if(ret == 0 || ret == -1)
 					break;
+				buffer[ret]='\0';
+				printf("%s", buffer);
+				printf("\n");
+			}
+			else if(cl_stat==INGAME)
+			{
+				if(!strcmp(buffer, "!help")) {
+					print_game_help();
+				}
+				else if(!strcmp(buffer, "!disconnect")) {
+
+				}
+				else if(!strcmp(buffer, "!shot")) {
+					shooting_area=game_cmd_shot(sock_udp, udp_srv_addr);
+					if(shooting_area!=0)
+						cl_stat=WAIT_UDP_STATUS;
+				}
+				else if(!strcmp(buffer, "!show")) {
+					show_grids();
+				}
 			}
 			else
-				continue;
-
-			// ricevo la risposta dal server
-			ret = recv_variable_string(sock_client, buffer);
-			if(ret == 0 || ret == -1)
-				break;
-			buffer[ret]='\0';
-			printf("%s", buffer);
-			printf("\n");
+				printf("Sono in uno stato in cui non è previsto che ricevi roba nella scanf\n");
 		}
 		else if(FD_ISSET(sock_client, &read_fd))
 		{
@@ -586,8 +624,7 @@ int main(int argc, char * argv[])
 				//chiedo se l'utente vuole giocare
 				char resp;
 				printf("%s vuole giocare con te, vuoi accettare? (y/n): ", strs[1]);
-				while(1)
-				{
+				while(1) {
 					scanf(" %c", &resp);
 					if(resp=='y' || resp=='n')
 						break;
@@ -596,20 +633,29 @@ int main(int argc, char * argv[])
 				}
 
 				//comunico la mia risposta al server (che la reindirizzerà al client)
-				if(resp=='y')
-				{
+				if(resp=='y') {
 					ret = send_variable_string(sock_client, "CONNECTACCEPT", 14);
-					start_game_console(sock_udp, strs[2], strs[3], 0);
+					udp_srv_addr = init_udp_game(sock_udp, strs[2], strs[3], 0);
+					cl_stat=WAIT_UDP_COORDS;
 				}
 				else
 					ret = send_variable_string(sock_client, "CONNECTDECLINE", 15);
-
-				//mi metto, eventualmente, in modalità gioco (UDP)
-				//MANCA
 			}
 			else
-			{
 				printf("Comando non riconosciuto: %s", strs[0]);
+		}
+		else if(FD_ISSET(sock_udp, &read_fd))	//RECEIVE SOCKET UDP
+		{
+			printf("Select sbloccata dal socket udp!\n");
+			if(cl_stat==WAIT_UDP_STATUS)
+			{
+				game_shot_response(sock_udp, udp_srv_addr, shooting_area);
+				cl_stat=WAIT_UDP_COORDS;
+			}
+			else if(cl_stat==WAIT_UDP_COORDS)
+			{
+				other_client_coords_turn(sock_udp, udp_srv_addr);
+				cl_stat=INGAME;
 			}
 		}
 	}
