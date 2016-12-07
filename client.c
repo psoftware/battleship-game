@@ -670,6 +670,7 @@ int main(int argc, char * argv[])
 				//comunico la mia risposta al server (che la reindirizzerà al client)
 				if(resp=='y') {
 					ret = send_variable_string(sock_client, "CONNECTACCEPT", 14);
+					strcpy(enemy_username, strs[1]);
 					udp_srv_addr = init_udp_game(sock_udp, strs[2], strs[3], 0);
 					cl_stat=WAIT_UDP_COORDS;
 				}
