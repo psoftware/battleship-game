@@ -17,7 +17,11 @@
 //libreria per il pack dei dati
 #include "lib/commlib.h"
 
+#define GRID_SIZE 6
+#define SHIP_COUNT 7
+
 typedef enum { false, true } bool;
+
 enum client_status {TCPCOMM, INGAME, WAIT_UDP_STATUS, WAIT_UDP_COORDS};
 
 char buffer[1024];
@@ -52,11 +56,11 @@ int initialize_udp_server(int port)
 }
 
 enum my_area_status {WATER, SHIP, DIEDSHIP};
-enum my_area_status my_grid[7][7];
+enum my_area_status my_grid[GRID_SIZE][GRID_SIZE];
 int my_success_hit = 0;
 
 enum enemy_area_status {UNKNOWN, NOHIT, HIT};
-enum enemy_area_status enemy_grid[7][7];
+enum enemy_area_status enemy_grid[GRID_SIZE][GRID_SIZE];
 int enemy_success_hit = 0;
 
 int ismyturn=0;
@@ -73,8 +77,8 @@ void print_game_help()
 void clear_grids()
 {
 	int i, j;
-	for(i=0; i<7; i++)
-		for(j=0; j<7; j++)
+	for(i=0; i<GRID_SIZE; i++)
+		for(j=0; j<GRID_SIZE; j++)
 		{
 			my_grid[i][j]=WATER;
 			enemy_grid[i][j]=UNKNOWN;
@@ -87,13 +91,13 @@ void clear_grids()
 void print_hor_delim()
 {
 	int j;
-	printf("   ");
-	for(j=0; j<7; j++)
+	printf("  ");
+	for(j=0; j<GRID_SIZE+1; j++)
 		printf("--");
 	for(j=0; j<5; j++)
 		printf("  ");
-	printf("    ");
-	for(j=0; j<7; j++)
+	printf("  ");
+	for(j=0; j<GRID_SIZE+1; j++)
 		printf("--");
 	printf("\n");
 }
@@ -104,10 +108,10 @@ void show_grids()
 
 	print_hor_delim();
 
-	for(i=0; i<7; i++)
+	for(i=0; i<GRID_SIZE; i++)
 	{
 		printf("%d |", i);
-		for(j=0; j<7; j++)
+		for(j=0; j<GRID_SIZE; j++)
 		{
 			char toprint;
 			switch(my_grid[i][j])
@@ -124,7 +128,7 @@ void show_grids()
 				printf("  ");
 
 		printf("%d |", i);
-		for(j=0; j<7; j++)
+		for(j=0; j<GRID_SIZE; j++)
 		{
 			char toprint;
 			switch(enemy_grid[i][j])
@@ -142,12 +146,12 @@ void show_grids()
 	print_hor_delim();
 
 	printf("   ");
-	for(j=0; j<7; j++)
+	for(j=0; j<GRID_SIZE; j++)
 		printf("%c ", 'A'+j);
 	for(j=0; j<5; j++)
 		printf("  ");
 	printf("    ");
-	for(j=0; j<7; j++)
+	for(j=0; j<GRID_SIZE; j++)
 		printf("%c ", 'A'+j);
 	printf("\n");
 }
@@ -158,7 +162,7 @@ int check_text_position(char * str)
 		return -1;
 	if(!isalpha(str[0]) || !isdigit(str[1]))
 		return -1;
-	if(str[0]-'a' >= 7 || str[1]-'0' >= 7)
+	if(str[0]-'a' >= GRID_SIZE || str[1]-'0' >= GRID_SIZE)
 		return -1;
 
 	return 1;
@@ -198,10 +202,10 @@ int place_ship(char * str)
 
 void ask_ships_position()
 {
-	printf("Posiziona 7 caselle nel formato <lettera><numero> (es. a2):\n");
+	printf("Posiziona %d caselle nel formato <lettera><numero> (es. a2):\n", SHIP_COUNT);
 	int i=0;
 	char str[10];
-	while(i!=7)
+	while(i!=SHIP_COUNT)
 	{
 		scanf("%s", str);
 		if(check_text_position(str)==-1)
@@ -256,7 +260,7 @@ void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_ad
 	}
 	
 	//invio lo stato solo se non ho perso, altrimenti procederò con una richiesta di disconnessione (vedi nel multiplexing udp)
-	if(enemy_success_hit==7)
+	if(enemy_success_hit==SHIP_COUNT)
 		return;
 
 	//invio lo stato al client
@@ -687,8 +691,8 @@ int main(int argc, char * argv[])
 			else if(cl_stat==WAIT_UDP_COORDS)
 			{
 				other_client_coords_turn(sock_udp, udp_srv_addr);
-				if(enemy_success_hit==7)			// se tutte le mie navi sono state affondate allora
-				{									// provvedo a notificare la mia sconfitta.
+				if(enemy_success_hit==SHIP_COUNT)		// se tutte le mie navi sono state affondate allora
+				{										// provvedo a notificare la mia sconfitta.
 					printf("\nHai perso la partita!\n\n");
 					cmd_you_win(sock_client);	// NON E' DETTO CHE LA RISPOSTA UDP ARRIVI SEMPRE PRIMA DELLA TCP!
 					cl_stat=TCPCOMM;
