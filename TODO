@@ -3,6 +3,4 @@
 - Inserire gli htons/htonsl dove necessario nell'UDP
 - Controllare formati input (porta/username)
 - Inserire timeout
-- Gestire disconnessione su Control-C
-- Che succede se il client destinatario si disconnette prima di accettare o rifiutare una connect? Gestire!
 - Le scanf vanno fatto col metodo dell'array dinamico, sistemare

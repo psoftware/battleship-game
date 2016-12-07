@@ -97,12 +97,37 @@ int des_client_check_duplicate(des_client *head, int cl_sock, char * username)
 	return -1;
 }
 
-void remove_client(int cl_sock, fd_set *master)
+void remove_client_nonotify(int cl_sock, fd_set *master)
 {
 	FD_CLR(cl_sock, master);
 	close(cl_sock);
 	des_client_remove(&client_list, cl_sock);
 	printf("Client %d sconnesso!\n", cl_sock);
+}
+
+int cmd_disconnect_request(int cl_sock);
+int cmd_reply_connect(int dest_sock, fd_set * master, int accepted);
+void remove_client(int cl_sock, fd_set *master)
+{
+	//individuo il cl_des del socket che voglio chiudere
+	des_client * cl_des = des_client_find(client_list, cl_sock);
+
+	if(cl_des != 0)
+		switch(cl_des->status)
+		{
+			case INGAME:								// il client stava giocando
+				cmd_disconnect_request(cl_sock);		// va mandata una notifica di disconnessione al client con cui giocava
+				break;
+			case CONNECTING:							// il client voleva connettersi a qualcun'altro 
+				cmd_disconnect_request(cl_sock);		// quindi mando una notifica di disconnessione al client con cui voleva giocare
+				break;
+			case WAIT_CONN_REPLY:						// il client ha ricevuto una connect, ma ancora non ha risposto
+				cmd_reply_connect(cl_sock, master, 0);	// presumo che abbia risposto negativamente
+				break;
+			case READY: break; case WAIT_INIT: break;	//non devo fare niente in questo caso
+		}
+
+	remove_client_nonotify(cl_sock, master);
 }
 
 /**** INIZIALIZZAZIONE ****/
@@ -221,6 +246,10 @@ int cmd_connect(int cl_sock, char * buff, int buff_len, char * res_address, char
 	dest_des->status=WAIT_CONN_REPLY;
 	dest_des->req_conn_sock = cl_sock;
 
+	//mi devo tenere da parte il req_conn_sock perchè potrebbe avvenire una disconnect
+	//prima che il client destinatario accetti/rifiuti, devo sapere a chi mandarla!
+	cl_des->req_conn_sock= dest_des->sock;
+
 	return 1;
 }
 
@@ -233,17 +262,27 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 	int message_lenght;
 
 	des_client * dest_des = des_client_find(client_list, dest_sock);
-	if(!dest_des || dest_des->status!=WAIT_CONN_REPLY)
+	if(!dest_des)
+	{
+		printf("cmd_reply_connect: dest_des %d non trovato\n", dest_sock);
+		return -1;	// errore generico
+	}
+	if(dest_des->status==READY)	//se sono in questa situazione significa che al cl_des si è disconnesso prima che ottenesse una risposta
+	{
+		printf("cmd_reply_connect: Il client che ha fatto la richiesta si è disconnesso\n");
+		return -2;	// condizione non gestita, meglio così
+	}
+	else if(dest_des->status!=WAIT_CONN_REPLY)
 	{
 		printf("cmd_reply_connect: Messaggio non previsto/Errore generico\n");
-		return -1;
+		return -1;	// errore generico
 	}
 
 	des_client * cl_des = des_client_find(client_list, dest_des->req_conn_sock);
 	if(!cl_des) // MANCA UNA CONDIZIONE (client in attesa)
 	{
 		printf("cmd_reply_connect: cl_des non trovato\n");
-		return -1;
+		return -1;	// errore generico
 	}
 
 	if(accepted==1)
@@ -272,7 +311,7 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 	//la send è fatta su req_conn_sock, cioè il client che ha avviato il comando di connect (precedentemente)
 	int ret = send_variable_string(dest_des->req_conn_sock, temp_buffer, message_lenght);
 	if(ret==0 || ret==-1)
-		remove_client(dest_des->req_conn_sock, master);
+		remove_client(dest_des->req_conn_sock, master);	//attenzione, potrebbe essere ricorsiva
 
 	return 1;
 }
@@ -287,11 +326,17 @@ int cmd_disconnect_request(int cl_sock)
 	}
 
 	des_client * dest_des = des_client_find(client_list, cl_des->req_conn_sock);
-	if(!dest_des || dest_des->status!=INGAME)
+	if(!dest_des)
 	{
-		printf("cmd_disconnect_request: dest_des %d non trovato oppure non sta giocando\n", cl_des->req_conn_sock);
+		printf("cmd_disconnect_request: dest_des %d non trovato\n", cl_des->req_conn_sock);
 		return -1;
 	}
+	if(dest_des->status==WAIT_INIT || dest_des->status==READY)
+	{
+		printf("cmd_disconnect_request: dest_des %d è nello stato pronto oppure wait_init\n", cl_des->req_conn_sock);
+		return -1;
+	}
+
 
 	int ret = send_variable_string(cl_des->req_conn_sock, "DISCONNECTNOTIFY", strlen("DISCONNECTNOTIFY")+1);
 	if(ret==0 || ret==-1)
@@ -460,22 +505,26 @@ int main(int argc, char * argv[])
 					}
 					else if(!strcmp(rec_buffer, "CONNECTACCEPT"))	// mando risposta al client che 
 					{												// aveva fatto precedentemente richiesta (accettato)
-						cmd_reply_connect(i, &master, 1);
+						if(cmd_reply_connect(i, &master, 1)==-1)
+							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}
 					else if(!strcmp(rec_buffer, "CONNECTDECLINE"))	// mando risposta al client che 
 					{												// aveva fatto precedentemente richiesta (rifiutato)
-						cmd_reply_connect(i, &master, 0);
+						if(cmd_reply_connect(i, &master, 0)==-1)
+							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}
-					else if(!strcmp(rec_buffer, "DISCONNECTREQ"))	// Il client si è arreso
+					else if(!strcmp(rec_buffer, "DISCONNECTREQ"))	// Il client si è arreso o si è disconnesso
 					{
-						cmd_disconnect_request(i);
+						if(cmd_disconnect_request(i)==-1)
+							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}
-					else if(!strcmp(rec_buffer, "ILOSEREQ"))	// Il client ha riconosciuto di aver perso
+					else if(!strcmp(rec_buffer, "ILOSEREQ"))		// Il client ha riconosciuto di aver perso
 					{
-						cmd_ilose_request(i);
+						if(cmd_ilose_request(i)==-1)
+							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}
 					else
