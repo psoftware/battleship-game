@@ -305,7 +305,7 @@ enum enemy_area_status * game_cmd_shot(int sock_client_udp, struct sockaddr_in u
 	return enemy_area;
 }
 
-void game_shot_response(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum enemy_area_status * enemy_area)
+void game_shot_response(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum enemy_area_status * enemy_area, char * enemy_username)
 {
 	//ricevi nuovo stato
 	enum response_code resp;
@@ -320,12 +320,12 @@ void game_shot_response(int sock_client_udp, struct sockaddr_in udp_srv_addr, en
 	{
 		my_success_hit++;
 		*enemy_area=HIT;
-		printf("?? dice: colpito! :)\n\n");
+		printf("%s dice: colpito! :)\n\n", enemy_username);
 	}
 	else if(resp==R_NOTHIT)
 	{
 		*enemy_area=NOHIT;
-		printf("?? dice: mancato :(\n\n");
+		printf("%s dice: mancato :(\n\n", enemy_username);
 	}
 }
 
@@ -518,6 +518,9 @@ int main(int argc, char * argv[])
 	//definisco il sockaddr che utilizzero per memorizzare l'indirizzo del client a cui manderò i dati UDP
 	struct sockaddr_in udp_srv_addr;
 
+	//mi tengo da parte l'username del client con cui voglio giocare, dopo aver fatto la connect
+	char enemy_username[20];
+
 	//definisco una variabile che conterrà la casella che sto shootando, visto che la risposta UDP è multiplexata
 	enum enemy_area_status * shooting_area;
 
@@ -588,10 +591,8 @@ int main(int argc, char * argv[])
 						case 1:
 							printf("Connessione riuscita!\n");
 							cl_stat=INGAME;
+							strcpy(enemy_username, username);
 							udp_srv_addr = init_udp_game(sock_udp, res_address, res_port, 1);
-							char asd[15];
-							inet_ntop(AF_INET, (struct sockaddr*)&udp_srv_addr.sin_addr, asd, 15);
-							printf("Riferimento client %s\n", asd);
 							continue;
 					}
 				}
@@ -687,7 +688,7 @@ int main(int argc, char * argv[])
 			printf("Select sbloccata dal socket udp!\n");
 			if(cl_stat==WAIT_UDP_STATUS)
 			{
-				game_shot_response(sock_udp, udp_srv_addr, shooting_area);
+				game_shot_response(sock_udp, udp_srv_addr, shooting_area, enemy_username);
 				cl_stat=WAIT_UDP_COORDS;
 			}
 			else if(cl_stat==WAIT_UDP_COORDS)
