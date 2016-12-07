@@ -532,6 +532,8 @@ int main(int argc, char * argv[])
 	FD_SET(sock_client, &master);
 	FD_SET(sock_udp, &master);
 
+	struct timeval tv;
+
 	enum client_status cl_stat=TCPCOMM;
 	for(;;)
 	{
@@ -549,7 +551,9 @@ int main(int argc, char * argv[])
 		}
 
 		read_fd = master;
-		select((sock_client>sock_udp) ? sock_client+1 : sock_udp+1, &read_fd, NULL, NULL, NULL);
+		tv.tv_sec = 15;
+		tv.tv_usec = 0;
+		select((sock_client>sock_udp) ? sock_client+1 : sock_udp+1, &read_fd, NULL, NULL, &tv);
 		if(FD_ISSET(0, &read_fd))
 		{
 
@@ -696,7 +700,7 @@ int main(int argc, char * argv[])
 				other_client_coords_turn(sock_udp, udp_srv_addr);
 				if(enemy_success_hit==SHIP_COUNT)		// se tutte le mie navi sono state affondate allora
 				{										// provvedo a notificare la mia sconfitta.
-					printf("\nHai perso la partita!\n\n");
+					printf("\n** Hai perso la partita!\n\n");
 					cmd_you_win(sock_client);	// NON E' DETTO CHE LA RISPOSTA UDP ARRIVI SEMPRE PRIMA DELLA TCP!
 					cl_stat=TCPCOMM;
 				}
@@ -709,6 +713,13 @@ int main(int argc, char * argv[])
 				break;
 			}
 		}
+		else
+			if(cl_stat==INGAME)
+			{
+				printf("\n** Tempo scaduto, hai perso!\n\n");
+				cmd_disconnect(sock_client);
+				cl_stat=TCPCOMM;
+			}
 	}
 
 	close(sock_client);
