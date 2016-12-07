@@ -4,6 +4,4 @@
 - Controllare formati input (porta/username)
 - Inserire timeout
 - Gestire disconnessione su Control-C
-- La griglia è 6x6, non 7x7!!
 - Manca username nel gioco UDP
-- Nella griglia va segnato anche il tentativo di colpire fallito!

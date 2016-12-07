@@ -55,7 +55,7 @@ int initialize_udp_server(int port)
 	return sock_udp;
 }
 
-enum my_area_status {WATER, SHIP, DIEDSHIP};
+enum my_area_status {WATER, HITWATER, SHIP, DIEDSHIP};
 enum my_area_status my_grid[GRID_SIZE][GRID_SIZE];
 int my_success_hit = 0;
 
@@ -117,6 +117,7 @@ void show_grids()
 			switch(my_grid[i][j])
 			{
 				case WATER: toprint=' '; break;
+				case HITWATER: toprint='~'; break;
 				case SHIP: toprint='$'; break;
 				case DIEDSHIP: toprint='X'; break;
 			}
@@ -241,7 +242,7 @@ void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_ad
 	}
 
 	enum my_area_status * my_area = get_my_coords(coords);
-	if(*my_area==DIEDSHIP)
+	if(*my_area==DIEDSHIP || *my_area==HITWATER)
 	{
 		printf("Il client ha già colpito questa posizione!\n");
 		resp=R_ERROR;
@@ -249,6 +250,7 @@ void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_ad
 	else if(*my_area==WATER)
 	{
 		printf("Il client ha colpito %s, ma c'era acqua\n", coords);
+		*my_area=HITWATER;
 		resp=R_NOTHIT;
 	}
 	else if(*my_area==SHIP)
