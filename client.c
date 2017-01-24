@@ -376,8 +376,8 @@ int cmd_connect(int sock_client, char * username, char * res_address, char * res
 		return 0;
 	}
 
-	printf("Connect Ricevuto: ");
-	print_str_eos(buffer, size);
+	//printf("Connect Ricevuto: ");
+	//print_str_eos(buffer, size);
 
 	if(!strcmp(buffer, "GENERICERROR"))
 		return -1;
@@ -493,7 +493,7 @@ int main(int argc, char * argv[])
 			close(sock_client);
 			return 0;
 		}
-		printf("Ricevuto: %s\n", buffer);
+		//printf("Ricevuto: %s\n", buffer);
 
 		if(!strcmp(buffer, "OK"))
 			break;
@@ -661,9 +661,9 @@ int main(int argc, char * argv[])
 			if(ret == 0 || ret == -1)
 					break;
 
-			printf("Il server ha mandato dati sul socket tcp senza che glieli abbia chiesti!\n");
-			printf("Ha mandato: ");
-			print_str_eos(buffer,ret);
+			//printf("Il server ha mandato dati sul socket tcp senza che glieli abbia chiesti!\n");
+			//printf("Ha mandato: ");
+			//print_str_eos(buffer,ret);
 
 			//splitto il pacchetto che mi è arrivato
 			char * strs[4];
@@ -707,7 +707,7 @@ int main(int argc, char * argv[])
 		}
 		else if(FD_ISSET(sock_udp, &read_fd))	//RECEIVE SOCKET UDP
 		{
-			printf("Select sbloccata dal socket udp!\n");
+			//printf("Select sbloccata dal socket udp!\n");
 			if(cl_stat==WAIT_UDP_STATUS)
 			{
 				game_shot_response(sock_udp, udp_srv_addr, shooting_area, enemy_username);
