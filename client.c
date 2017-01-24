@@ -534,18 +534,30 @@ int main(int argc, char * argv[])
 
 	struct timeval tv;
 
+	//questa variabile booleana mi serve per evitare che venga ristampato il carattere della console quando scatta il timeout
+	bool skip_cmdchar=false;
+
 	enum client_status cl_stat=TCPCOMM;
 	for(;;)
 	{
 		// prompt console per comando
 		if(cl_stat==WAIT_UDP_STATUS || cl_stat==WAIT_UDP_COORDS)
+		{
 			set_stdin_select(&master, false);	//disabilito temporaneamente lo sblocco su select causato da stdin
+			skip_cmdchar=false;					//se dovevo skippare il carattere della console ora non devo più farlo
+		}
 		else
 		{
-			if(cl_stat==0)
-				printf("> ");
-			else
-				printf("# ");
+			if(!skip_cmdchar)
+			{
+				if(cl_stat==0)
+					printf("> ");
+				else
+					printf("# ");
+			}
+			else	//il carattere deve essere skippato solo una volta
+				skip_cmdchar=false;
+
 			fflush(stdout);
 			set_stdin_select(&master, true);
 		}
@@ -726,6 +738,8 @@ int main(int argc, char * argv[])
 				cmd_disconnect(sock_client);
 				cl_stat=TCPCOMM;
 			}
+			else
+				skip_cmdchar=true;
 	}
 
 	close(sock_client);
