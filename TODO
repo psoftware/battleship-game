@@ -1,6 +1,5 @@
 - Aggiustare tutte le dimensioni delle stringhe, tra cui username, indirizzi e porte.
   Usare la libreria commlib per dichiarare tutte le costanti necessarie.
-- Inserire gli htons/htonsl dove necessario nell'UDP
 - Controllare formati input (porta/username)
 - Alzare timeout come da specifiche
 - Le scanf vanno fatto col metodo dell'array dinamico, sistemare

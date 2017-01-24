@@ -141,7 +141,8 @@ enum response_code {R_ERROR, R_HIT, R_NOTHIT};
 int udp_send_response_status(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum response_code resp)
 {
 	//printf("udp_send_response_status: %s length %d\n", (resp==R_ERROR) ? "R_ERROR" : (resp==R_HIT) ? "R_HIT" : "R_NOTHIT",(int)sizeof(resp));
-	int ret = sendto(sock_client_udp, (void*)&resp, sizeof(resp), 0, (struct sockaddr*)&udp_srv_addr, sizeof(udp_srv_addr));
+	int resp_htonl = htonl((int)resp);
+	int ret = sendto(sock_client_udp, (void*)&resp_htonl, sizeof(int), 0, (struct sockaddr*)&udp_srv_addr, sizeof(udp_srv_addr));
 	if(ret == 0 || ret == -1)
 	{
 		perror("udp_send_response_status error: ");
@@ -157,7 +158,9 @@ int udp_receive_response_status(int sock_client_udp, struct sockaddr_in udp_srv_
 {
 	//printf("udp_receive_response_status: length %d\n", (int)sizeof(*resp));
 	int addrlen=sizeof(udp_srv_addr);
-	int ret = recvfrom(sock_client_udp, (void*)resp, sizeof(*resp), 0, (struct sockaddr*)&udp_srv_addr, (socklen_t*)&addrlen);
+	int raw_resp;
+	int ret = recvfrom(sock_client_udp, (void*)&raw_resp, sizeof(int), 0, (struct sockaddr*)&udp_srv_addr, (socklen_t*)&addrlen);
+	*resp=ntohl(raw_resp);
 	if(ret == 0 || ret == -1)
 	{
 		perror("udp_receive_response_status error: ");
