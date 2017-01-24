@@ -3,3 +3,5 @@
 - Controllare formati input (porta/username)
 - Alzare timeout come da specifiche
 - Le scanf vanno fatto col metodo dell'array dinamico, sistemare
+- Quando scatta il timer viene replicato il simbolo della console
+- Togliere le stringhe di debug

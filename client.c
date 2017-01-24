@@ -564,12 +564,12 @@ int main(int argc, char * argv[])
 				// parso il comando
 				if(!strcmp(buffer, "!quit"))
 					break;
-				if(!strcmp(buffer, "!help"))
+				else if(!strcmp(buffer, "!help"))
 				{
 					print_help();
 					continue;
 				}
-				if(!strcmp(buffer, "!connect"))
+				else if(!strcmp(buffer, "!connect"))
 				{
 					char username[20];
 					scanf("%s", username);
@@ -579,19 +579,19 @@ int main(int argc, char * argv[])
 					{
 						case -1:
 							printf("Errore generico!\n");
-							break;
+							continue;
 						case -2:
 							printf("Non puoi giocare con te stesso!\n");
-							break;
+							continue;
 						case -3:
 							printf("L'utente inserito non esiste!\n");
-							break;
+							continue;
 						case -4:
 							printf("L'utente inserito già sta giocando!\n");
-							break;
+							continue;
 						case -5:
 							printf("L'utente inserito ha rifiutato la tua richiesta!\n");
-							break;
+							continue;
 						case 1:
 							printf("Connessione riuscita!\n");
 							cl_stat=INGAME;
@@ -600,14 +600,17 @@ int main(int argc, char * argv[])
 							continue;
 					}
 				}
-				if(!strcmp(buffer, "!who"))
+				else if(!strcmp(buffer, "!who"))
 				{
 					ret = send_variable_string(sock_client, "!who", 5);
 					if(ret == 0 || ret == -1)
 						break;
 				}
 				else
+				{
+					printf("Il comando inserito è errato!\n");
 					continue;
+				}
 
 				// ricevo la risposta dal server (non ho bisogno di multiplexare perchè ricevo risposte a comandi inviati)
 				ret = recv_variable_string(sock_client, buffer);
@@ -634,6 +637,8 @@ int main(int argc, char * argv[])
 				else if(!strcmp(buffer, "!show")) {
 					show_grids();
 				}
+				else
+					printf("Il comando inserito è errato!\n");
 			}
 			else
 				printf("Sono in uno stato in cui non è previsto che ricevi roba nella scanf\n");
