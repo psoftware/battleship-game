@@ -164,20 +164,20 @@ void cmd_who(char * str)
 
 	des_client *q;
 	for(q=client_list; q!=NULL; q=q->next)
-		if(q->status==INGAME || q->status==READY)
+		if(q->status!=WAIT_INIT)
 		{
-			printf("%s(%s)\n", q->username, (q->status==READY)?"libero":"occupato");
+			//printf("%s(%s)\n", q->username, (q->status==READY)?"libero":"occupato");
 			strcat(str, "\t");
 			strcat(str, q->username);
 			strcat(str, "(");
-			strcat(str, (q->status==INGAME)?"occupato":"libero");
+			strcat(str, (q->status==READY)?"libero":"occupato");
 			strcat(str, ")\n");
 		}
 }
 
 int cmd_user(int cl_sock, char * buff, int buff_len)
 {
-	print_str_eos(buff, buff_len);
+	//print_str_eos(buff, buff_len);
 
 	//individuo il cl_des del socket che ha mandato la richiesta user
 	des_client * cl_des = des_client_find(client_list, cl_sock);
@@ -198,12 +198,14 @@ int cmd_user(int cl_sock, char * buff, int buff_len)
 	strcpy(cl_des->port, strs[2]);
 	cl_des->status = READY;
 
+	printf("%s è libero\n", cl_des->username);
+
 	return 1;
 }
 
 int cmd_connect(int cl_sock, char * buff, int buff_len, char * res_address, char * res_port)
 {
-	print_str_eos(buff, buff_len);
+	//print_str_eos(buff, buff_len);
 
 	//individuo il cl_des del socket che ha mandato la richiesta
 	des_client * cl_des = des_client_find(client_list, cl_sock);
@@ -264,30 +266,30 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 	des_client * dest_des = des_client_find(client_list, dest_sock);
 	if(!dest_des)
 	{
-		printf("cmd_reply_connect: dest_des %d non trovato\n", dest_sock);
+		//printf("cmd_reply_connect: dest_des %d non trovato\n", dest_sock);
 		return -1;	// errore generico
 	}
 	if(dest_des->status==READY)	//se sono in questa situazione significa che al cl_des si è disconnesso prima che ottenesse una risposta
 	{
-		printf("cmd_reply_connect: Il client che ha fatto la richiesta si è disconnesso\n");
+		//printf("cmd_reply_connect: Il client che ha fatto la richiesta si è disconnesso\n");
 		return -2;	// condizione non gestita, meglio così
 	}
 	else if(dest_des->status!=WAIT_CONN_REPLY)
 	{
-		printf("cmd_reply_connect: Messaggio non previsto/Errore generico\n");
+		//printf("cmd_reply_connect: Messaggio non previsto/Errore generico\n");
 		return -1;	// errore generico
 	}
 
 	des_client * cl_des = des_client_find(client_list, dest_des->req_conn_sock);
 	if(!cl_des) // MANCA UNA CONDIZIONE (client in attesa)
 	{
-		printf("cmd_reply_connect: cl_des non trovato\n");
+		//printf("cmd_reply_connect: cl_des non trovato\n");
 		return -1;	// errore generico
 	}
 
 	if(accepted==1)
 	{
-		printf("Il client ha accettato la richiesta!\n");
+		printf("%s si è connesso a %s!\n", cl_des->username, dest_des->username);
 
 		cl_des->status=INGAME;
 		dest_des->status=INGAME;
@@ -303,7 +305,7 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 	{
 		cl_des->status=READY;
 		dest_des->status=READY;
-		printf("Il client non vuole giocare!\n");
+		//printf("Il client non vuole giocare!\n");
 		strcpy(temp_buffer, "USERNOTACCEPTED");
 		message_lenght=strlen("USERNOTACCEPTED")+1;
 	}
@@ -344,6 +346,9 @@ int cmd_disconnect_request(int cl_sock)
 
 	cl_des->status=READY;
 	dest_des->status=READY;
+	printf("%s si è disconnesso da %s!\n", cl_des->username, dest_des->username);
+	printf("%s é libero\n", cl_des->username);
+	printf("%s é libero\n", dest_des->username);
 
 	return 1;
 }
@@ -388,6 +393,7 @@ int main(int argc, char * argv[])
 
 	// creo e bindo socket server
 	int sock_serv = initialize_server_socket("0.0.0.0", port);
+	printf("Indirizzo: 0.0.0.0 (Porta: %d)\n\n", port);
 
 	struct sockaddr_in cl_addr;
 	memset(&cl_addr, 0, sizeof(cl_addr));
@@ -405,8 +411,6 @@ int main(int argc, char * argv[])
 
 	while(1)
 	{
-		printf("\n");
-
 		read_fd = master;
 		select(max_sock_num+1, &read_fd, NULL, NULL, NULL);
 
@@ -415,8 +419,8 @@ int main(int argc, char * argv[])
 		for(i=0; i<=max_sock_num; i++)
 			if(FD_ISSET(i, &read_fd))
 			{
-				printf("Select risvegliata da socket %d\n", i);
-				if(i==sock_serv)//significa che è riuscita una accept
+				//printf("Select risvegliata da socket %d\n", i);
+				if(i==sock_serv)	//significa che è riuscita una accept
 				{
 					int my_len = sizeof(cl_addr);
 					new_sd = accept(sock_serv, (struct sockaddr*)&cl_addr, (socklen_t*)&my_len);
@@ -434,11 +438,11 @@ int main(int argc, char * argv[])
 					strcpy(new_cl->username, "");
 					des_client_add(&client_list, new_cl);
 
-					printf("Client con ip %s connesso (socket %d). In attesa di dati!\n", new_cl->address, new_sd);
+					printf("Client con ip %s connesso. In attesa di username e porta UDP!\n", new_cl->address);
 				}
 				else //altrimenti qualche client vuole mandarmi dati
 				{
-					printf("Nuovi dati da socket %d!\n", i);
+					//printf("Nuovi dati da socket %d!\n", i);
 					int ret = recv_variable_string(i, rec_buffer);
 					if(ret == 0 || ret == -1) {
 						remove_client(i, &master);
@@ -446,55 +450,55 @@ int main(int argc, char * argv[])
 					}
 
 					if(!strcmp(rec_buffer, "user")) {
-						printf("Il client ha inviato username e porta!\n");
+						//printf("Il client ha inviato username e porta!\n");
 						switch(cmd_user(i, rec_buffer, ret))
 						{
 							case -1:	//errore non recuperabile
-								printf("Errore non recuperabile\n");
+								//printf("Errore non recuperabile\n");
 								strcpy(send_buffer, "GENERICERROR");
 								break;
 							case -2:	//username duplicato
-								printf("Username già esistente\n");
+								//printf("Username già esistente\n");
 								strcpy(send_buffer, "USEREXISTS");
 								break;
 							case 1:		//tutto ok!
-								printf("Dati corretti, il client ora è pronto\n");
+								//printf("Dati corretti, il client ora è pronto\n");
 								strcpy(send_buffer, "OK");
 								break;
 						}
 					}
 					else if(!strcmp(rec_buffer, "!who")) {
-						printf("Ricevuto who!\n");
+						//printf("Ricevuto who!\n");
 						cmd_who(send_buffer);
 					}
 					else if(!strcmp(rec_buffer, "!connect")) {
-						printf("Ricevuto connect!\n");
+						//printf("Ricevuto connect!\n");
 						char res_address[30];
 						char res_port[5];
 						switch(cmd_connect(i, rec_buffer, ret, res_address, res_port))
 						{
 							case -1:	//errore non recuperabile
-								printf("Errore non recuperabile\n");
+								//printf("Errore non recuperabile\n");
 								strcpy(send_buffer, "GENERICERROR");
 								break;
 							case -2:
-								printf("L'utente vuole connettersi a se stesso (wtf?)\n");
+								//printf("L'utente vuole connettersi a se stesso (wtf?)\n");
 								strcpy(send_buffer, "USERSELF");
 								break;
 							case -3:	//username duplicato
-								printf("Username non esistente\n");
+								//printf("Username non esistente\n");
 								strcpy(send_buffer, "USERNOTFOUND");
 								break;
 							case -4:
-								printf("Il client sta già giocando\n");
+								//printf("Il client sta già giocando\n");
 								strcpy(send_buffer, "USERNOTREADY");
 								break;
 							case -5:
-								printf("Il client sta effettuando la connessione ad un altro giocatore\n");
+								//printf("Il client sta effettuando la connessione ad un altro giocatore\n");
 								strcpy(send_buffer, "USERNOTREADY");
 								break;
 							case -6:
-								printf("Qualcuno ha già chiesto al client di giocare, anche se la richiesta è in attesa\n");
+								//printf("Qualcuno ha già chiesto al client di giocare, anche se la richiesta è in attesa\n");
 								strcpy(send_buffer, "USERNOTREADY");
 								break;
 							case 1:
@@ -529,10 +533,10 @@ int main(int argc, char * argv[])
 					}
 					else
 					{
-						printf("Comando non riconosciuto!\n");
+						//printf("Comando non riconosciuto!\n");
 						strcpy(send_buffer, "GENERICERROR");
 					}
-					printf("Sto inviando %s\n", send_buffer);
+					//printf("Sto inviando %s\n", send_buffer);
 					ret = send_variable_string(i, send_buffer, (message_lenght==0)?strlen(send_buffer)+1:message_lenght);
 					if(ret == 0 || ret == -1) {
 						remove_client(i, &master);
