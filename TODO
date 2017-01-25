@@ -3,5 +3,4 @@
 - Controllare formati input (porta/username)
 - Alzare timeout come da specifiche
 - Le scanf vanno fatto col metodo dell'array dinamico, sistemare
-- Togliere le stringhe di debug
 - rinominare gli eseguibili di server e client rispettivamente in battle_server e battle_client

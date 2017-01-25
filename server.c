@@ -102,7 +102,7 @@ void remove_client_nonotify(int cl_sock, fd_set *master)
 	FD_CLR(cl_sock, master);
 	close(cl_sock);
 	des_client_remove(&client_list, cl_sock);
-	printf("Client %d sconnesso!\n", cl_sock);
+	printf("client %d si è sconnesso\n", cl_sock);
 }
 
 int cmd_disconnect_request(int cl_sock);
@@ -438,7 +438,7 @@ int main(int argc, char * argv[])
 					strcpy(new_cl->username, "");
 					des_client_add(&client_list, new_cl);
 
-					printf("Client con ip %s connesso. In attesa di username e porta UDP!\n", new_cl->address);
+					printf("client (%d) con ip %s connesso. In attesa di username e porta UDP!\n", new_cl->sock, new_cl->address);
 				}
 				else //altrimenti qualche client vuole mandarmi dati
 				{
