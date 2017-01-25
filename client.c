@@ -731,10 +731,16 @@ int main(int argc, char * argv[])
 				break;
 			}
 		}
-		else
-			if(cl_stat==INGAME)
+		else // è scattato il timer
+			if(cl_stat==INGAME)		//se è il mio turno significa che mi arrendo
 			{
 				printf("\n** Tempo scaduto, hai perso!\n\n");
+				cmd_disconnect(sock_client);
+				cl_stat=TCPCOMM;
+			}
+			else if(cl_stat==WAIT_UDP_COORDS || cl_stat==WAIT_UDP_STATUS)		//significa che non ho avuto una risposta UDP in sufficiente tempo
+			{
+				printf("\n** Tempo per la risposta dell'avversario scaduto!\n\n");
 				cmd_disconnect(sock_client);
 				cl_stat=TCPCOMM;
 			}
