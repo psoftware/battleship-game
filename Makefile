@@ -1,19 +1,19 @@
-all: server client
+all: battle_server battle_client
 
-server: server.o commlib.o
-	gcc server.o commlib.o -o server
+battle_server: battle_server.o commlib.o
+	gcc battle_server.o commlib.o -o battle_server
 
-client: client.o commlib.o
-	gcc client.o commlib.o -o client
+battle_client: battle_client.o commlib.o
+	gcc battle_client.o commlib.o -o battle_client
 
 commlib.o: lib/commlib.c
 	gcc -Wall -g -c lib/commlib.c -o commlib.o
 
-server.o: server.c
-	gcc -Wall -g -c server.c -o server.o
+battle_server.o: battle_server.c
+	gcc -Wall -g -c battle_server.c -o battle_server.o
 
-client.o: client.c
-	gcc -Wall -g -c client.c -o client.o
+battle_client.o: battle_client.c
+	gcc -Wall -g -c battle_client.c -o battle_client.o
 
 clean:
-	rm commlib.o server.o client.o server client
+	rm commlib.o battle_server.o battle_client.o battle_server battle_client
