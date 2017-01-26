@@ -695,12 +695,18 @@ int main(int argc, char * argv[])
 					ret = send_variable_string(sock_client, "CONNECTDECLINE", 15);
 			}
 			else if(!strcmp(strs[0], "DISCONNECTNOTIFY")){
-				printf("Il client si è arreso. Hai vinto la partita!\n");
-				cl_stat=TCPCOMM;
+				if(cl_stat!=TCPCOMM)
+				{
+					printf("Il client si è arreso. Hai vinto la partita!\n");
+					cl_stat=TCPCOMM;
+				}
 			}
 			else if(!strcmp(strs[0], "WINNOTIFY")){
-				printf("\n\nHai vinto la partita!\n");
-				cl_stat=TCPCOMM;
+				if(cl_stat!=TCPCOMM)
+				{
+					printf("\n\nHai vinto la partita!\n");
+					cl_stat=TCPCOMM;
+				}
 			} 
 			else
 				printf("Comando non riconosciuto: %s", strs[0]);

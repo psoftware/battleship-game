@@ -333,10 +333,17 @@ int cmd_disconnect_request(int cl_sock)
 		printf("cmd_disconnect_request: dest_des %d non trovato\n", cl_des->req_conn_sock);
 		return -1;
 	}
-	if(dest_des->status==WAIT_INIT || dest_des->status==READY)
+	if(dest_des->status==WAIT_INIT)
 	{
-		printf("cmd_disconnect_request: dest_des %d è nello stato pronto oppure wait_init\n", cl_des->req_conn_sock);
+		printf("cmd_disconnect_request: dest_des %d è nello stato wait_init\n", cl_des->req_conn_sock);
 		return -1;
+	}
+
+	// potrebbero arrivare due disconnect request contemporanee da parte dei due host, quindi
+	// il client dest_des viene già liberato alla prima richiesta. A tal punto evito di mandare la disconnect
+	if(dest_des->status==READY)
+	{
+		return 1;
 	}
 
 
