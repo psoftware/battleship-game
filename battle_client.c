@@ -415,6 +415,12 @@ int cmd_disconnect(int sock_client)
 	return ret;
 }
 
+int cmd_timeoutudp(int sock_client)
+{
+	int ret = send_variable_string(sock_client, "TIMEOUTUDP", strlen("TIMEOUTUDP")+1);
+	return ret;
+}
+
 int cmd_you_win(int sock_client)
 {
 	int ret = send_variable_string(sock_client, "ILOSEREQ", strlen("ILOSEREQ")+1);
@@ -707,7 +713,14 @@ int main(int argc, char * argv[])
 					printf("\n** Hai vinto la partita!\n");
 					cl_stat=TCPCOMM;
 				}
-			} 
+			}
+			else if(!strcmp(strs[0], "TIMEOUTNOTIFY")){
+				if(cl_stat!=TCPCOMM)
+				{
+					printf("\n** Tempo per la risposta scaduto, hai perso la partita!\n");
+					cl_stat=TCPCOMM;
+				}
+			}
 			else
 				printf("Comando non riconosciuto: %s", strs[0]);
 		}
@@ -747,7 +760,7 @@ int main(int argc, char * argv[])
 			else if(cl_stat==WAIT_UDP_COORDS || cl_stat==WAIT_UDP_STATUS)		//significa che non ho avuto una risposta UDP in sufficiente tempo
 			{
 				printf("\n** Tempo per la risposta dell'avversario scaduto!\n\n");
-				cmd_disconnect(sock_client);
+				cmd_timeoutudp(sock_client);
 				cl_stat=TCPCOMM;
 			}
 			else

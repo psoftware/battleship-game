@@ -356,6 +356,9 @@ int cmd_disconnect_request(int cl_sock, int notification_type)
 		case 1:
 			strcpy(notify_str, "WINNOTIFY");
 			break;
+		case 2:
+			strcpy(notify_str, "TIMEOUTNOTIFY");
+			break;
 	}
 
 	int ret = send_variable_string(cl_des->req_conn_sock, notify_str, strlen(notify_str)+1);
@@ -548,6 +551,12 @@ int main(int argc, char * argv[])
 					else if(!strcmp(rec_buffer, "ILOSEREQ"))		// Il client ha riconosciuto di aver perso
 					{
 						if(cmd_disconnect_request(i, 1)==-1)
+							remove_client(i, &master);
+						continue;									// Non è prevista risposta al client mittente
+					}
+					else if(!strcmp(rec_buffer, "TIMEOUTUDP"))		// Il client ha aspettato troppo per una risposta udp
+					{
+						if(cmd_disconnect_request(i, 2)==-1)
 							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}
