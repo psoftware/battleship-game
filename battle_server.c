@@ -105,7 +105,7 @@ void remove_client_nonotify(int cl_sock, fd_set *master)
 	printf("client %d si è sconnesso\n", cl_sock);
 }
 
-int cmd_disconnect_request(int cl_sock);
+int cmd_disconnect_request(int cl_sock, int notification_type);
 int cmd_reply_connect(int dest_sock, fd_set * master, int accepted);
 void remove_client(int cl_sock, fd_set *master)
 {
@@ -116,10 +116,10 @@ void remove_client(int cl_sock, fd_set *master)
 		switch(cl_des->status)
 		{
 			case INGAME:								// il client stava giocando
-				cmd_disconnect_request(cl_sock);		// va mandata una notifica di disconnessione al client con cui giocava
+				cmd_disconnect_request(cl_sock, 0);		// va mandata una notifica di disconnessione al client con cui giocava
 				break;
 			case CONNECTING:							// il client voleva connettersi a qualcun'altro 
-				cmd_disconnect_request(cl_sock);		// quindi mando una notifica di disconnessione al client con cui voleva giocare
+				cmd_disconnect_request(cl_sock, 0);		// quindi mando una notifica di disconnessione al client con cui voleva giocare
 				break;
 			case WAIT_CONN_REPLY:						// il client ha ricevuto una connect, ma ancora non ha risposto
 				cmd_reply_connect(cl_sock, master, 0);	// presumo che abbia risposto negativamente
@@ -318,7 +318,7 @@ int cmd_reply_connect(int dest_sock, fd_set * master, int accepted)
 	return 1;
 }
 
-int cmd_disconnect_request(int cl_sock)
+int cmd_disconnect_request(int cl_sock, int notification_type)
 {
 	des_client * cl_des = des_client_find(client_list, cl_sock);
 	if(!cl_des) // MANCA UNA CONDIZIONE (client in attesa)
@@ -346,8 +346,19 @@ int cmd_disconnect_request(int cl_sock)
 		return 1;
 	}
 
+	// posso avere tre tipi di notifiche per la disconnessione
+	char notify_str[50];
+	switch(notification_type)
+	{
+		case 0:
+			strcpy(notify_str, "DISCONNECTNOTIFY");
+			break;
+		case 1:
+			strcpy(notify_str, "WINNOTIFY");
+			break;
+	}
 
-	int ret = send_variable_string(cl_des->req_conn_sock, "DISCONNECTNOTIFY", strlen("DISCONNECTNOTIFY")+1);
+	int ret = send_variable_string(cl_des->req_conn_sock, notify_str, strlen(notify_str)+1);
 	if(ret==0 || ret==-1)
 		return ret;
 
@@ -360,6 +371,7 @@ int cmd_disconnect_request(int cl_sock)
 	return 1;
 }
 
+/*
 int cmd_ilose_request(int cl_sock)
 {
 	des_client * cl_des = des_client_find(client_list, cl_sock);
@@ -385,6 +397,7 @@ int cmd_ilose_request(int cl_sock)
 
 	return 1;
 }
+*/
 
 /**** MAIN ****/
 
@@ -528,13 +541,13 @@ int main(int argc, char * argv[])
 					}
 					else if(!strcmp(rec_buffer, "DISCONNECTREQ"))	// Il client si è arreso o si è disconnesso
 					{
-						if(cmd_disconnect_request(i)==-1)
+						if(cmd_disconnect_request(i, 0)==-1)
 							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}
 					else if(!strcmp(rec_buffer, "ILOSEREQ"))		// Il client ha riconosciuto di aver perso
 					{
-						if(cmd_ilose_request(i)==-1)
+						if(cmd_disconnect_request(i, 1)==-1)
 							remove_client(i, &master);
 						continue;									// Non è prevista risposta al client mittente
 					}

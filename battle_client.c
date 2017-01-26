@@ -697,14 +697,14 @@ int main(int argc, char * argv[])
 			else if(!strcmp(strs[0], "DISCONNECTNOTIFY")){
 				if(cl_stat!=TCPCOMM)
 				{
-					printf("Il client si è arreso. Hai vinto la partita!\n");
+					printf("\n** Il client si è arreso. Hai vinto la partita!\n");
 					cl_stat=TCPCOMM;
 				}
 			}
 			else if(!strcmp(strs[0], "WINNOTIFY")){
 				if(cl_stat!=TCPCOMM)
 				{
-					printf("\n\nHai vinto la partita!\n");
+					printf("\n** Hai vinto la partita!\n");
 					cl_stat=TCPCOMM;
 				}
 			} 
