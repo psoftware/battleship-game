@@ -16,6 +16,9 @@
 //libreria per il pack dei dati
 #include "lib/commlib.h"
 
+#define USERNAME_MAXL 60
+#define ADDRESS_MAXL 20
+#define PORT_MAXL 10
 
 /*** STRUTTURE DATI ***/
 
@@ -24,9 +27,9 @@ enum cl_status {WAIT_INIT, CONNECTING, WAIT_CONN_REPLY, READY, INGAME};
 typedef struct des_clients
 {
 	int sock;
-	char username[30];
-	char address[15];
-	char port[5];
+	char username[USERNAME_MAXL];
+	char address[ADDRESS_MAXL+1];
+	char port[PORT_MAXL+1];
 
 	int req_conn_sock;		//in questo campo viene depositato il socket del client in attesa di connettersi o connesso
 	enum cl_status status;
@@ -233,7 +236,7 @@ int cmd_connect(int cl_sock, char * buff, int buff_len, char * res_address, char
 		return -6; //qualcun'altro sta già chiedendo al giocatore di giocare
 
 	//invio comando al client con cui il client vuole giocare
-	char temp_buffer[50];
+	char temp_buffer[100];
 	char prefix[]="CONNECTREQ";
 	char * params[4];
 	params[0]=prefix; params[1]=cl_des->username; params[2]=cl_des->address; params[3]=cl_des->port;
@@ -502,8 +505,8 @@ int main(int argc, char * argv[])
 					}
 					else if(!strcmp(rec_buffer, "!connect")) {
 						//printf("Ricevuto connect!\n");
-						char res_address[30];
-						char res_port[5];
+						char res_address[ADDRESS_MAXL+1];
+						char res_port[PORT_MAXL+1];
 						switch(cmd_connect(i, rec_buffer, ret, res_address, res_port))
 						{
 							case -1:	//errore non recuperabile

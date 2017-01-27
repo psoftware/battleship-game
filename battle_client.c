@@ -19,6 +19,8 @@
 
 #define GRID_SIZE 6
 #define SHIP_COUNT 7
+#define USERNAME_MAXL 60
+#define PORT_MAXL 40
 
 typedef enum { false, true } bool;
 
@@ -283,7 +285,7 @@ void other_client_coords_turn(int sock_client_udp, struct sockaddr_in udp_srv_ad
 
 enum enemy_area_status * game_cmd_shot(int sock_client_udp, struct sockaddr_in udp_srv_addr)
 {
-	char str[20];
+	char str[40];
 	scanf("%s", str);
 
 	if(check_text_position(str)==-1)
@@ -483,8 +485,8 @@ int main(int argc, char * argv[])
 	{
 		//richiedo username e porta
 		char prefix_str[]="user";
-		char user_str[20];
-		char port_str[20];
+		char user_str[USERNAME_MAXL];
+		char port_str[PORT_MAXL];
 
 		strcpy(prefix_str, "user");
 		printf("\nInserisci il tuo nome: ");
@@ -544,7 +546,7 @@ int main(int argc, char * argv[])
 	struct sockaddr_in udp_srv_addr;
 
 	//mi tengo da parte l'username del client con cui voglio giocare, dopo aver fatto la connect
-	char enemy_username[20];
+	char enemy_username[USERNAME_MAXL];
 
 	//definisco una variabile che conterrà la casella che sto shootando, visto che la risposta UDP è multiplexata
 	enum enemy_area_status * shooting_area;
@@ -608,10 +610,10 @@ int main(int argc, char * argv[])
 				}
 				else if(!strcmp(buffer, "!connect"))
 				{
-					char username[20];
+					char username[USERNAME_MAXL];
 					scanf("%s", username);
 					char res_address[30];
-					char res_port[5];
+					char res_port[PORT_MAXL];
 					printf("Mi sto connettendo a %s\n", username);
 					switch(cmd_connect(sock_client, username, res_address, res_port))
 					{
