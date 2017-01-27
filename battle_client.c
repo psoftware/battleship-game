@@ -219,7 +219,8 @@ void ask_ships_position()
 			else
 			{
 				i++;
-				printf("Nave posizionata, mancano altre %d navi\n", SHIP_COUNT-i);
+				if(i!=SHIP_COUNT)	//salta quando non mancano più navi
+					printf("Nave posizionata, mancano altre %d navi\n", SHIP_COUNT-i);
 			}
 		}
 	}
@@ -346,7 +347,8 @@ struct sockaddr_in init_udp_game(int sock_client_udp, char * address, char * por
 	clear_grids();
 	ask_ships_position();
 
-	printf("Mi connetto su %s porta %d\n", address, atoi(port));
+	if(isfirst==0)
+		printf("\nE' il turno dell'avversario!\n");
 
 	//se inizio prima posso passare alla console, altrimenti devo
 	//attendere la mossa dell'altro client
@@ -610,6 +612,7 @@ int main(int argc, char * argv[])
 					scanf("%s", username);
 					char res_address[30];
 					char res_port[5];
+					printf("Mi sto connettendo a %s\n", username);
 					switch(cmd_connect(sock_client, username, res_address, res_port))
 					{
 						case -1:
