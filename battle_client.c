@@ -205,18 +205,22 @@ void ask_ships_position()
 {
 	printf("Posiziona %d caselle nel formato <lettera><numero> (es. a2):\n", SHIP_COUNT);
 	int i=0;
-	char str[10];
+	char str[60];
 	while(i!=SHIP_COUNT)
 	{
+		printf("Coordinata: ");
 		scanf("%s", str);
 		if(check_text_position(str)==-1)
-			printf("Hai inserito una cordinata errata, riprova.\n");
+			printf("Hai inserito una cordinata errata (%s), riprova.\n", str);
 		else
 		{
 			if(place_ship(str)==-2)
 				printf("E' già presente una nave su quella casella, riprova.\n");
 			else
+			{
 				i++;
+				printf("Nave posizionata, mancano altre %d navi\n", SHIP_COUNT-i);
+			}
 		}
 	}
 }
