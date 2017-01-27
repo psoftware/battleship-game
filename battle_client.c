@@ -22,6 +22,8 @@
 #define USERNAME_MAXL 60
 #define PORT_MAXL 40
 
+#define UDPCONSOLE_TIMEOUT 60
+
 typedef enum { false, true } bool;
 
 enum client_status {TCPCOMM, INGAME, WAIT_UDP_STATUS, WAIT_UDP_COORDS};
@@ -590,7 +592,7 @@ int main(int argc, char * argv[])
 		}
 
 		read_fd = master;
-		tv.tv_sec = 15;
+		tv.tv_sec = UDPCONSOLE_TIMEOUT;
 		tv.tv_usec = 0;
 		select((sock_client>sock_udp) ? sock_client+1 : sock_udp+1, &read_fd, NULL, NULL, &tv);
 		if(FD_ISSET(0, &read_fd))
