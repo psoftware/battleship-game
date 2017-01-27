@@ -11,6 +11,8 @@
 
 #include <unistd.h>
 
+#include <ctype.h>
+
 #include <errno.h>
 
 /**** METODI PER LA INVIO RICEZIONE DEI DATI ****/
@@ -170,4 +172,18 @@ int udp_receive_response_status(int sock_client_udp, struct sockaddr_in udp_srv_
 		return -1;
 	//printf("udp_receive_response_status: %s length %d\n", (*resp==R_ERROR) ? "R_ERROR" : (*resp==R_HIT) ? "R_HIT" : "R_NOTHIT", (int)sizeof(*resp));
 	return 1;
+}
+
+int check_port_str(char * str)
+{
+	int i;
+	for(i=0; i<strlen(str); i++)
+		if(!isdigit(str[i]))
+			return -1;
+
+	int portnum = atoi(str);
+	if(portnum < 0 || portnum > 65535)
+		return -1;
+
+	return portnum;
 }

@@ -10,3 +10,5 @@ int udp_send_coords(int sock_client_udp, struct sockaddr_in udp_srv_addr, char c
 int udp_receive_coords(int sock_client_udp, struct sockaddr_in udp_srv_addr, char * coord1, char * coord2);
 int udp_send_response_status(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum response_code resp);
 int udp_receive_response_status(int sock_client_udp, struct sockaddr_in udp_srv_addr, enum response_code * resp);
+
+int check_port_str(char * str);

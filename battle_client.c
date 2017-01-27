@@ -438,13 +438,19 @@ void set_stdin_select(fd_set* fd, bool set)
 int main(int argc, char * argv[])
 {
 	int porta, ret;
-	if(argc != 3 )
+	if(argc != 3)
 	{
 		printf("Parametri non corretti!\n");
 		printf("La sintassi è ./battleclient <host remoto> <porta>\n");
 		exit(1);
 	}
-	porta=atoi(argv[2]);
+	//porta=atoi(argv[2]);
+	porta=check_port_str(argv[2]);
+	if(porta==-1)
+	{
+		printf("Numero di porta non valido! Range valido 0-65535\n");
+		exit(1);
+	}
 
 	// creo il socket TCP
 	int sock_client = socket(AF_INET, SOCK_STREAM, 0);
@@ -477,10 +483,17 @@ int main(int argc, char * argv[])
 		strcpy(prefix_str, "user");
 		printf("\nInserisci il tuo nome: ");
 		scanf("%s", user_str);
-		printf("Inserisci la porta UDP di ascolto: ");
-		scanf("%s", port_str);
 
-		udp_port=atoi(port_str);
+		while(1)
+		{
+			printf("Inserisci la porta UDP di ascolto: ");
+			scanf("%s", port_str);
+			udp_port=check_port_str(port_str);
+			if(udp_port==-1)
+				printf("Numero di porta non valido! Range valido 0-65535\n");
+			else
+				break;
+		}
 
 		//pacco i dati inseriti e li invio
 		char * params[3]; params[0]=prefix_str; params[1]=user_str; params[2]=port_str;

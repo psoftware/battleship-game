@@ -412,7 +412,13 @@ int main(int argc, char * argv[])
 		printf("Porta non specificata!\n");
 		exit(1);
 	}
-	port=atoi(argv[1]);
+
+	port=check_port_str(argv[1]);
+	if(port==-1)
+	{
+		printf("Numero di porta non valido! Range valido 0-65535\n");
+		exit(1);
+	}
 
 	// creo e bindo socket server
 	int sock_serv = initialize_server_socket("0.0.0.0", port);
