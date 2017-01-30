@@ -209,7 +209,7 @@ void ask_ships_position()
 {
 	printf("Posiziona %d caselle nel formato <lettera><numero> (es. a2):\n", SHIP_COUNT);
 	int i=0;
-	char str[60];
+	char str[1024];
 	while(i!=SHIP_COUNT)
 	{
 		printf("Coordinata: ");
